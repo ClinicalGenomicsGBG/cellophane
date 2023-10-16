@@ -40,15 +40,12 @@ types-jsonschema = "^4.19.0.3"
 types-humanfriendly = "^10.0.1.10"
 types-psutil = "^5.9.5.16"
 
-[tool.pylint.MASTER]
-load-plugins=[
-    "pylint_per_file_ignores",
-]
+[tool.mypy]
+python_version = "3.12"
+disallow_untyped_defs = true
 
-[tool.pylint.'MESSAGES CONTROL']
-per-file-ignores = [
-    "/tests/:missing-function-docstring,missing-module-docstring,missing-class-docstring,protected-access,redefined-outer-name",
-]
+[tool.coverage.run]
+omit = ["cellophane/src/testing/*"]
 
 [build-system]
 requires = ["poetry-core"]

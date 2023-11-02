@@ -45,6 +45,15 @@ types-psutil = "^5.9.5.16"
 python_version = "3.12"
 disallow_untyped_defs = true
 
+
+[[tool.mypy.overrides]]
+module = [
+    "cloudpickle",
+    "mpire",
+    "drmaa2",
+]
+ignore_missing_imports = true
+
 [tool.coverage.run]
 omit = ["cellophane/src/testing/*"]
 

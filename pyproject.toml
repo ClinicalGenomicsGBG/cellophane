@@ -60,3 +60,6 @@ omit = ["cellophane/src/testing/*"]
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+addopts = "--cov cellophane --cov-report term-missing --dist loadscope -n auto"

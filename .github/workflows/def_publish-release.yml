@@ -29,5 +29,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create '${{ inputs.version }}' \
-            --notes '${{ inputs.changes }}' \
+            --notes ${{ toJSON(inputs.changes) }} \
             --title '${{ inputs.version }}'

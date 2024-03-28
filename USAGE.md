@@ -316,8 +316,8 @@ Checkpoints are stored as `cellophane.Checkpoint` objects, which have the follow
 
 Method                    | Returns | Description
 --------------------------|---------|-------------
-`store(\*args, \*kwargs)` | `None`  | A function used to store the checkpoint. Takes arbitrary arguments that will be included in the hash.
-`check(\*args, \*kwargs)` | `bool`  | A function used to check if the checkpoint exists. Takes arbitrary arguments that will be included in the hash.
+`store(*args, *kwargs)` | `None`  | A function used to store the checkpoint. Takes arbitrary arguments that will be included in the hash.
+`check(*args, *kwargs)` | `bool`  | A function used to check if the checkpoint exists. Takes arbitrary arguments that will be included in the hash.
 
 > **Note:** The hash only checks the size and modification time of the files, so it is possible to get false positives.
 

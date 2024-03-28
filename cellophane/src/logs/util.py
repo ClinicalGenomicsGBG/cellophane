@@ -9,6 +9,12 @@ from pathlib import Path
 from rich.logging import RichHandler
 
 
+class _ExtFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        if hasattr(record, "label") and record.label == "external":
+            record.levelno = 0
+        return True
+
 def setup_queue_logging(
     queue: Queue,
     logger: logging.Logger = logging.getLogger(),
@@ -43,8 +49,12 @@ def start_queue_listener() -> Queue:
     """
 
     queue: Queue = Queue()
+    for handler in logging.getLogger().handlers:
+        handler.addFilter(_ExtFilter())
     listener = QueueListener(
-        queue, *logging.getLogger().handlers, respect_handler_level=True
+        queue,
+        *logging.getLogger().handlers,
+        respect_handler_level=True,
     )
     listener.start()
     atexit.register(listener.stop)
@@ -89,9 +99,9 @@ def add_file_handler(path: Path, logger: logging.Logger = logging.getLogger()) -
     file_handler = logging.FileHandler(path)
     file_handler.setFormatter(
         logging.Formatter(
-            "%(asctime)s : %(label)s : %(message)s",
+            "%(asctime)s : %(levelname)s : %(label)s : %(message)s",
             defaults={"label": "external"},
         )
     )
-    file_handler.setLevel(logging.DEBUG)
+    file_handler.setLevel(0)
     logger.addHandler(file_handler)

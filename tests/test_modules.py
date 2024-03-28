@@ -4,7 +4,6 @@
 
 import logging
 import subprocess as sp
-from collections import UserList
 from copy import copy
 from graphlib import CycleError
 from logging.handlers import QueueListener
@@ -13,15 +12,16 @@ from pathlib import Path
 from typing import Any, Callable
 from unittest.mock import MagicMock
 
+from attrs import define
 from cloudpickle import dumps, loads
 from psutil import Process, TimeoutExpired
 from pytest import LogCaptureFixture, mark, param, raises
 from pytest_mock import MockerFixture
 
 from cellophane.src import data, modules
-from cellophane.src.data import Sample, Samples
 from cellophane.src.executors import SubprocesExecutor
-from cellophane.src.modules import Hook, Runner
+from cellophane.src.modules.hook import resolve_dependencies
+from cellophane.src.modules.runner_ import _cleanup
 
 LIB = Path(__file__).parent / "lib"
 
@@ -55,13 +55,13 @@ class Test__cleanup:
         procs, pids = self.dummy_procs(3)
 
         mocker.patch(
-            "cellophane.src.modules.psutil.Process.children",
+            "cellophane.src.modules.runner_.Process.children",
             return_value=[Process(pid=p) for p in pids],
         )
 
         if timeout:
             mocker.patch(
-                "cellophane.src.modules.psutil.Process.terminate",
+                "cellophane.src.modules.runner_.Process.terminate",
                 side_effect=TimeoutExpired(10),
             )
 
@@ -69,68 +69,24 @@ class Test__cleanup:
 
         with raises(SystemExit), caplog.at_level("DEBUG"):
             logger = logging.LoggerAdapter(logging.getLogger(), {"label": "DUMMY"})
-            modules._cleanup(logger)()
+            _cleanup(logger)()
 
         assert all(p.poll() is not None for p in procs)
         for p in pids:
             assert log_line.format(pid=p) in caplog.messages
 
 
-class Test__instance_or_subclass:
-    """Test _is_instance_or_subclass function."""
-
-    class _SampleSub(data.Sample):
-        pass
-
-    class _SamplesSub(data.Samples):
-        pass
-
-    hook = modules.pre_hook()(lambda: ...)
-    runner = modules.runner()(lambda: ...)
-
-    @staticmethod
-    @mark.parametrize(
-        "obj,cls,expected",
-        [
-            (_SampleSub, data.Sample, True),
-            (_SamplesSub, data.Samples, True),
-            (_SamplesSub, UserList, True),
-            (_SamplesSub, list, False),
-            (hook, modules.Hook, True),
-            (hook, Callable, True),
-            (hook, str, False),
-            (runner, modules.Runner, True),
-            (runner, Callable, True),
-            (runner, str, False),
-        ],
-    )
-    def test_instance_or_subclass(
-        obj: type[_SampleSub] | type[_SamplesSub] | Any | Runner,
-        cls: (
-            type[Sample]
-            | type[dict]
-            | type[Samples]
-            | type[UserList]
-            | type[list]
-            | type[Hook]
-            | type[Callable[..., Any]]
-            | type[str]
-            | type[Runner]
-        ),
-        expected: bool,
-    ) -> None:
-        """Test _is_instance_or_subclass function."""
-        assert modules._is_instance_or_subclass(obj, cls) == expected
-
-
 class Test_Runner:
     """Test Runner class."""
+    @define(slots=False)
+    class DummySample(data.Sample):
+        dummy: str | None = None
 
     samples: data.Samples = data.Samples(
         [
-            data.Sample(id="a"),
-            data.Sample(id="b"),
-            data.Sample(id="c"),
+            DummySample(id="a", dummy="x"),
+            DummySample(id="b", dummy="y"),
+            DummySample(id="c", dummy=None),
         ]
     )
 
@@ -171,7 +127,14 @@ class Test_Runner:
                 {},
                 [False] * 3,
                 [["Runner did not return any samples"]],
-                id="None",
+                id="none",
+            ),
+            param(
+                MagicMock(return_value=None),
+                {"split_by": "dummy"},
+                [False] * 3,
+                [["Runner did not return any samples"]],
+                id="split",
             ),
             param(
                 MagicMock(side_effect=RuntimeError),
@@ -185,7 +148,7 @@ class Test_Runner:
                         "Sample c failed - Sample was not processed",
                     ]
                 ],
-                id="Exception",
+                id="exception",
             ),
             param(
                 lambda samples, **_: samples[0].fail("DUMMY") or samples,
@@ -211,7 +174,6 @@ class Test_Runner:
         self,
         caplog: LogCaptureFixture,
         tmp_path: Path,
-        mocker: MockerFixture,
         runner_mock: data.Samples,
         runner_kwargs: dict[str, Any],
         expected_fail: list[int],
@@ -221,23 +183,17 @@ class Test_Runner:
         setattr(runner_mock, "__name__", "runner_mock")
         setattr(runner_mock, "__qualname__", "runner_mock")
         _runner = modules.runner(**runner_kwargs)(runner_mock)
-        _config_mock = MagicMock()
-
-        mocker.patch(
-            "cellophane.src.modules._cleanup",
-            return_value=_config_mock,
-        )
-
         with caplog.at_level("DEBUG"):
             _log_queue: Queue = Queue()
             _listener = QueueListener(_log_queue, *logging.getLogger().handlers)
             _listener.start()
             _ret = _runner(
                 _log_queue,
-                config=MagicMock(timestamp="DUMMY", log_level=None),
+                config=MagicMock(log_level=None),
                 root=tmp_path / "root",
                 samples_pickle=dumps(self.samples),
                 executor_cls=SubprocesExecutor,
+                timestamp="DUMMY",
             )
             _listener.stop()
 
@@ -395,10 +351,11 @@ class Test_Hook:
         with caplog.at_level("DEBUG"):
             _ret = _hook(
                 samples=input_value,
-                config=MagicMock(workdir=tmp_path, timestamp="DUMMY", log_level=None),
+                config=MagicMock(workdir=tmp_path, log_level=None),
                 root=Path(),
                 executor_cls=SubprocesExecutor,
                 log_queue=Queue(),
+                timestamp="DUMMY",
             )
 
         for log_line in logs:
@@ -406,7 +363,7 @@ class Test_Hook:
         assert _ret.value == expected
 
 
-class Test__resolve_hook_dependencies:
+class Test__resolve_dependencies:
     """Test _resolve_hook_dependencies function."""
 
     @staticmethod
@@ -482,7 +439,7 @@ class Test__resolve_hook_dependencies:
     ) -> None:
         """Test _resolve_hook_dependencies function."""
         # FIXME: Hook order is non-deterministic if there are no dependencies
-        _resolved = modules._resolve_hook_dependencies(hooks)
+        _resolved = resolve_dependencies(hooks)
         assert [m.label for m in _resolved] == expected
 
     @staticmethod
@@ -522,7 +479,7 @@ class Test__resolve_hook_dependencies:
     )
     def test_resolve_exception(hooks: list[type[modules.Hook]]) -> None:
         """Test _resolve_hook_dependencies function exceptions."""
-        assert raises(CycleError, modules._resolve_hook_dependencies, hooks)
+        assert raises(CycleError, resolve_dependencies, hooks)
 
 
 class Test_load:

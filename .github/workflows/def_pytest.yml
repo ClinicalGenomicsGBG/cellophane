@@ -37,7 +37,11 @@ jobs:
       - name: poetry-install
         run: poetry install
       - name: pytest
-        run: poetry run pytest --junit-xml=pytest.xml
+        env:
+          TERM: dumb
+          COLUMNS: 500
+          TERMINAL_WIDTH: 500
+        run: TERMINAL_WIDTH=500 poetry run pytest --junit-xml=pytest.xml
       - uses: actions/upload-artifact@v4
         if: (!cancelled())
         with:

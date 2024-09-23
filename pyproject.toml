@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "cellophane"
-version = "1.1.0"
+version = "1.1.1-dev"
 description = "Library for wrappers integrating with SLIMS"
 authors = ["Erik Demitz-Helin <erik.demitz-helin@gu.se>"]
 readme = "README.md"
@@ -40,7 +40,6 @@ types-humanfriendly = "^10.0.1.10"
 types-psutil = "^5.9.5.16"
 pylint = "^3.0.2"
 pre-commit = "^3.6.0"
-pytest-env = "^1.1.5"
 
 [tool.mypy]
 python_version = "3.11"
@@ -86,10 +85,6 @@ addopts = """
     --cov-report term-missing
     --dist loadfile -n 2
     """
-
-[tool.pytest_env]
-TERM = "dumb"
-COLUMNS = "500"
 
 [tool.pylint.'MESSAGES CONTROL']
 max-line-length = 88

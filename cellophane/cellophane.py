@@ -1,7 +1,6 @@
 """Main cellophane entry point wrapper."""
 
 import time
-from contextlib import contextmanager
 from importlib.metadata import version
 from importlib.util import find_spec
 from logging import LoggerAdapter, getLogger
@@ -223,7 +222,7 @@ def _main(
     )
 
     # If there are failed samples, unregister the workdir from the cleaner
-    if samples.failed:
+    if samples.failed or not config.clean:
         cleaner.unregister(config.workdir / config.tag)
     cleaner.clean(logger=logger)
     # If not post-hook has copied the outputs, warn the user

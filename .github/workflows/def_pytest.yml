@@ -38,7 +38,7 @@ jobs:
           TERM: dumb
           COLUMNS: 500
           TERMINAL_WIDTH: 500
-        run: poetry run pytest --junit-xml=pytest.xml
+        run: TERMINAL_WIDTH=500 poetry run pytest --junit-xml=pytest.xml
       - uses: EnricoMi/publish-unit-test-result-action@v2
         if: always()
         with:

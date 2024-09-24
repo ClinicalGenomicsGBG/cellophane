@@ -2,7 +2,7 @@
 
 import rich_click as click
 
-from .src.dev import main
+from .dev import main
 
 if __name__ == "__main__":
     click.rich_click.DEFAULT_STRING = "[{}]"

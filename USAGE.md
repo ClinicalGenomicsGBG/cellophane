@@ -95,7 +95,7 @@ Argument    | Type                    | Description
 ------------|-------------------------|-------------
 `samples`   | `cellophane.Samples`    | Samples to process.
 `config`    | `cellophane.Config`     | Wrapper configuration.
-`timestamp` | `str`                   | A string representation of the current timestamp (YYYYMMDDHHMMSS).
+`timestamp` | `time.struct_time`      | Pipeline starting time.
 `logger`    | `logging.LoggerAdapter` | A logger that can be used to log messages.
 `root`      | `pathlib.Path`          | A `pathlib.Path` pointing to the root directory of the wrapper repository.
 `workdir`   | `pathlib.Path`          | A `pathlib.Path` pointing to the working directory of the hook.
@@ -127,7 +127,7 @@ Argument      | Type                     | Description
 --------------|--------------------------|-------------
 `samples`     | `cellophane.Samples`     | Samples to process.
 `config`      | `cellophane.Config`      | Wrapper configuration.
-`timestamp`   | `str`                    | A string representation of the current timestamp (YYYYMMDDHHMMSS).
+`timestamp`   | `time.struct_time`       | Pipeline starting time.
 `logger`      | `logging.LoggerAdapter`  | A logger that can be used to log messages.
 `root`        | `pathlib.Path`           | A `pathlib.Path` pointing to the root directory of the wrapper.
 `workdir`     | `pathlib.Path`           | A `pathlib.Path` pointing to the working directory of the runner.
@@ -161,7 +161,7 @@ Argument    | Type                    | Description
 ------------|-------------------------|-------------
 `samples`   | `cellophane.Samples`    | Samples to process.
 `config`    | `cellophane.Config`     | Wrapper configuration.
-`timestamp` | `str`                   | A string representation of the current timestamp (YYYYMMDDHHMMSS).
+`timestamp` | `time.struct_time`      | Pipeline starting time.
 `logger`    | `logging.LoggerAdapter` | A logger that can be used to log messages.
 `root`      | `pathlib.Path`          | A `pathlib.Path` pointing to the root directory of the wrapper repository.
 `workdir`   | `pathlib.Path`          | A `pathlib.Path` pointing to the working directory of the hook.
@@ -647,25 +647,25 @@ $ python -m my_awesome_wrapper --config_file config.yaml  --bongo bar --help
 
 Usage: my_awesome_wrapper [OPTIONS]
 
-╭─ Options ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│    --log_level          [DEBUG|INFO|WARNING|ERROR|CRITICAL]  Log level (INFO)                                                                     │
-│    --executor_name      [subprocess]                         Name of the executor to use (subprocess)                                             │
-│    --executor_cpus      INTEGER                              Number of CPUs to allocate to jobs started (if supported by the executor) (1)        │
-│    --executor_memory    SIZE                                 Ammount of memory to allocate to jobs started (if supported by the executor) (2 GB)  │
-│    --config_file        PATH                                 Path to config file                                                                  │
-│    --logdir             PATH                                 Log directory (out/logs)                                                             │
-│    --workdir            PATH                                 Working directory where intermediate files are stored (out)                          │
-│    --resultdir          PATH                                 Results base directory where output files are copied (out/results)                   │
-│    --tag                TEXT                                 Tag identifying the pipeline run (defaults to a timestamp - YYMMDDHHMMSS) (DUMMY)    │
-│    --samples_file       PATH                                 Path YAML file with samples - eg. [{id: ID, files: [F1, F2]}, ...] (samples.yaml)    │
-│ *  --bingo_bango        TEXT                                 Some string (REQUIRED)                                                               │
-│    --bongo              [foo|bar]                            A string with a limited set of allowed values (bar)                                  │
-│    --foo                ARRAY                                A list of integers ([13, 37])                                                        │
-│    --bar                MAPPING                              A mapping                                                                            │
-│    --baz/--no_baz                                            A boolean (baz)                                                                      │
-│    --max_file_size      SIZE                                 The maximum file size in bytes (8)                                                   │
-│    --help                                                    Show this message and exit.                                                          │
-╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│    --log_level          [DEBUG|INFO|WARNING|ERROR|CRITICAL]  Log level (INFO)                                                                           │
+│    --executor_name      [subprocess]                         Name of the executor to use (subprocess)                                                   │
+│    --executor_cpus      INTEGER                              Number of CPUs to allocate to jobs started (if supported by the executor) (1)              │
+│    --executor_memory    SIZE                                 Ammount of memory to allocate to jobs started (if supported by the executor) (2 GB)        │
+│    --config_file        PATH                                 Path to config file                                                                        │
+│    --logdir             PATH                                 Log directory (out/logs)                                                                   │
+│    --workdir            PATH                                 Working directory where intermediate files are stored (out)                                │
+│    --resultdir          PATH                                 Results base directory where output files are copied (out/results)                         │
+│    --tag                TEXT                                 Tag identifying the pipeline run (defaults to the starting time - YYYYMMDD-HHMMSS) (DUMMY) │
+│    --samples_file       PATH                                 Path YAML file with samples - eg. [{id: ID, files: [F1, F2]}, ...] (samples.yaml)          │
+│ *  --bingo_bango        TEXT                                 Some string (REQUIRED)                                                                     │
+│    --bongo              [foo|bar]                            A string with a limited set of allowed values (bar)                                        │
+│    --foo                ARRAY                                A list of integers ([13, 37])                                                              │
+│    --bar                MAPPING                              A mapping                                                                                  │
+│    --baz/--no_baz                                            A boolean (baz)                                                                            │
+│    --max_file_size      SIZE                                 The maximum file size in bytes (8)                                                         │
+│    --help                                                    Show this message and exit.                                                                │
+╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
 ```
 

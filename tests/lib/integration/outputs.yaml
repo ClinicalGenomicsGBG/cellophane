@@ -25,13 +25,17 @@ structure:
             else:
               logger.error(f"Unknown output type {o}")
 
-      
+
       @runner()
       @output("single.txt")
       @output("sample_{sample.id}.txt")
       @output("missing.txt")
       @output("glob/*.txt", dst_name="invalid_rename.txt")
       @output("single.txt", dst_name="rename.txt")
+      @output("glob/*.txt", dst_dir="timestamp_fmt_dir_{timestamp[%H%M%S]}")
+      @output("single.txt", dst_name="timestamp_fmt_name_{timestamp[%H%M%S]}.txt")
+      @output("glob/*.txt", dst_dir="timestamp_dir_{timestamp}")
+      @output("single.txt", dst_name="timestamp_name_{timestamp}.txt")
       @output("overwrite_a.txt", dst_name="overwrite.txt")
       @output("overwrite_b.txt", dst_name="overwrite.txt")
       @output("nested/**/*.txt")
@@ -68,12 +72,15 @@ structure:
   input:
     a.txt: "INPUT_A"
     b.txt: "INPUT_B"
+mocks:
+  cellophane.cellophane.time.localtime:
+    return_value: !!python/object/apply:time.gmtime [-22069583]
 args:
   --samples_file: samples.yaml
   --workdir: out
   --tag: DUMMY
 logs:
-- Copying 14 outputs
+- Copying 20 outputs
 - Copying out/DUMMY/runner_a/single.txt to out/results/single.txt
 - Copying out/DUMMY/runner_a/sample_a.txt to out/results/sample_a.txt
 - Copying out/DUMMY/runner_a/sample_b.txt to out/results/sample_b.txt
@@ -81,6 +88,12 @@ logs:
 - Copying out/DUMMY/runner_a/glob/a.txt to out/results/a.txt
 - Copying out/DUMMY/runner_a/glob/b.txt to out/results/b.txt
 - Copying out/DUMMY/runner_a/single.txt to out/results/rename.txt
+- Copying out/DUMMY/runner_a/glob/a.txt to out/results/timestamp_dir_19690420-133337/a.txt
+- Copying out/DUMMY/runner_a/glob/b.txt to out/results/timestamp_dir_19690420-133337/b.txt
+- Copying out/DUMMY/runner_a/glob/a.txt to out/results/timestamp_fmt_dir_133337/a.txt
+- Copying out/DUMMY/runner_a/glob/b.txt to out/results/timestamp_fmt_dir_133337/b.txt
+- Copying out/DUMMY/runner_a/single.txt to out/results/timestamp_name_19690420-133337.txt
+- Copying out/DUMMY/runner_a/single.txt to out/results/timestamp_fmt_name_133337.txt
 - to out/results/overwrite.txt
 - out/results/overwrite.txt already exists
 - Copying out/DUMMY/runner_a/nested/a/x.txt to out/results/x.txt

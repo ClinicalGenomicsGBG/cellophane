@@ -1,5 +1,6 @@
 """Outut classes for copying files to another directory."""
 
+import time
 from glob import glob
 from pathlib import Path
 from typing import Iterable
@@ -9,6 +10,7 @@ from attrs import define, field
 from attrs.setters import convert
 
 from .container import Container
+from .util import Timestamp
 
 
 @define
@@ -88,6 +90,7 @@ class OutputGlob:  # type: ignore[no-untyped-def]
         samples: Iterable,
         workdir: Path,
         config: Container,
+        timestamp: time.struct_time,
     ) -> set[Output]:
         """Resolve the glob pattern to a list of files to be copied.
 
@@ -112,6 +115,7 @@ class OutputGlob:  # type: ignore[no-untyped-def]
                 "config": config,
                 "workdir": workdir,
                 "sample": sample,
+                "timestamp": Timestamp(ref=timestamp),
             }
 
             match self.src.format(**meta):

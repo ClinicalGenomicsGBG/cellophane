@@ -1,4 +1,5 @@
 import json
+import time
 from functools import cached_property
 from pathlib import Path
 from random import randbytes
@@ -56,6 +57,9 @@ class Checkpoint:
                     samples=self.samples,
                     config=self.config,
                     workdir=self.workdir,
+                    # Only src is considered, so using the current time works
+                    # since timestamps are never included in src paths
+                    timestamp=time.localtime()
                 )
                 output_paths = {o.src for o in outputs}
 

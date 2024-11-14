@@ -1,5 +1,6 @@
 """Runners for executing functions as jobs."""
 
+import time
 from functools import partial, reduce
 from logging import LoggerAdapter, getLogger
 from multiprocessing import Queue
@@ -59,7 +60,7 @@ class Runner:
         root: Path,
         samples: Samples,
         executor_cls: type[Executor],
-        timestamp: str,
+        timestamp: time.struct_time,
         workdir: Path,
     ) -> tuple[Samples, DeferredCleaner]:
         handle_warnings()
@@ -197,7 +198,7 @@ def start_runners(
     config: Config,
     root: Path,
     executor_cls: type[Executor],
-    timestamp: str,
+    timestamp: time.struct_time,
     cleaner: Cleaner,
 ) -> Samples:
     """Start cellphane runners in parallel and collect the results.

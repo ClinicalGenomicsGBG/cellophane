@@ -87,12 +87,9 @@ def cellophane(label: str, root: Path) -> click.Command:
         @with_options(schema)
         def inner(config: Config, **_: Any) -> None:
             """Run cellophane"""
-            start_time = time.time()
-            timestamp = time.strftime(
-                "%Y%m%d_%H%M%S",
-                time.localtime(start_time),
-            )
-            config.tag = config.tag or timestamp
+            start_time = time.localtime()
+            config.tag = config.tag or time.strftime("%y%m%d-%H%M%S", start_time)
+
             handle_warnings()
             console_handler.setLevel(config.log.level)
             file_handler = setup_file_handler(
@@ -131,7 +128,7 @@ def cellophane(label: str, root: Path) -> click.Command:
                     log_queue=log_queue,
                     root=root,
                     executor_cls=executor_cls,
-                    timestamp=timestamp,
+                    timestamp=start_time,
                 )
 
             except Exception as exc:
@@ -139,7 +136,7 @@ def cellophane(label: str, root: Path) -> click.Command:
                 log_listener.stop()
                 raise SystemExit(1) from exc
 
-            time_elapsed = format_timespan(time.time() - start_time)
+            time_elapsed = format_timespan(time.time() - time.mktime(start_time))
             logger.info(f"Execution complete in {time_elapsed}")
             log_listener.stop()
 
@@ -159,7 +156,7 @@ def _main(
     config: Config,
     root: Path,
     executor_cls: type[Executor],
-    timestamp: str,
+    timestamp: time.struct_time,
 ) -> None:
     """Run cellophane"""
     # Load samples from file, or create empty samples object

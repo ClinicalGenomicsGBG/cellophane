@@ -1,3 +1,4 @@
+import time
 from copy import deepcopy
 from functools import partial
 from logging import LoggerAdapter, getLogger
@@ -79,7 +80,7 @@ class Hook:
         root: Path,
         executor_cls: type[Executor],
         log_queue: Queue,
-        timestamp: str,
+        timestamp: time.struct_time,
         cleaner: Cleaner,
     ) -> Samples:
         logger = LoggerAdapter(getLogger(), {"label": self.label})
@@ -152,7 +153,7 @@ def run_hooks(
     root: Path,
     executor_cls: type[Executor],
     log_queue: Queue,
-    timestamp: str,
+    timestamp: time.struct_time,
     cleaner: Cleaner,
     logger: LoggerAdapter,
 ) -> Samples:

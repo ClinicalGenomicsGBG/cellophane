@@ -129,7 +129,7 @@ class Runner:
                 logger.warning(f"Unhandeled exception: {exc!r}", exc_info=exc)
                 cleanup(reason=f"Unhandeled exception in runner '{self.name}' {exc!r}")
 
-        _resolve_outputs(samples, workdir, config, logger)
+        _resolve_outputs(samples, workdir, config, timestamp, logger)
         for sample in samples.complete:
             logger.debug(f"Sample {sample.id} processed successfully")
         for sample in samples.unprocessed:
@@ -147,6 +147,7 @@ def _resolve_outputs(
     samples: Samples,
     workdir: Path,
     config: Config,
+    timestamp: time.struct_time,
     logger: LoggerAdapter,
 ) -> None:
     for output_ in samples.output.copy():
@@ -160,6 +161,7 @@ def _resolve_outputs(
                 samples=samples.complete,
                 workdir=workdir,
                 config=config,
+                timestamp=timestamp,
             )
         except Exception as exc:  # pylint: disable=broad-except
             logger.warning(f"Failed to resolve output {output_}: {exc!r}")

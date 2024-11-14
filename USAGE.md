@@ -297,9 +297,9 @@ Outputs for runners can be specified using the `@cellophane.output` decorator.
 
 Argument      | Type  | Description
 --------------|-------|-------------
-`src`         | `str` | A glob pattern specifying the output files. Paths are relative to workdir. Patterns will be formatted with access to the `sample` and `samples` objects.
-`dst_name`    | `str` | The file name for the output. If not specified, the `src` pattern will be used. Can contain parent directories, and may be used to rename directories if `src` matches a directory.
-`dst_dir`     | `str` | The directory for the output, relative to `config.resultdir`. Files will be placed under this directory using their original names or the `dst_name` if specified.
+`src`         | `str` | A glob pattern specifying the output files. Paths are relative to workdir. Patterns will be formatted with access to the `config`, `workdir`, `sample`, and `samples` objects.
+`dst_name`    | `str` | The file name for the output. If not specified, the `src` pattern will be used. Can contain parent directories, and may be used to rename directories if `src` matches a directory. Patterns will be formatted with access to the `config`, `workdir`, `sample`, and `samples` objects. Additionally, the formatted pattern will be passed to `time.strftime` with the pipeline start time as the reference date.
+`dst_dir`     | `str` | The directory for the output, relative to `config.resultdir`. Files will be placed under this directory using their original names or the `dst_name` if specified. Patterns will be formatted with access to the `config`, `workdir`, `sample`, and `samples` objects. Additionally, the formatted pattern will be passed to `time.strftime` with the pipeline start time as the reference date.
 `checkpoint`  | `str` | The label of the checkpoint that this file belongs to. If not specified, the file will be considered part of the main output. Defaults to `'main'`.
 `òptional`    | `bool`| If `True`, the output will not be considered required. No warning will be issued if the output is missing. Will be excluded when generating the checkpoint hash.
 

@@ -324,22 +324,57 @@ class Samples(UserList[S]):
         return (_reconstruct, (Samples, self._mixins, args, kwargs, state, cls_kwargs))
 
     def __or__(self, other: "Samples") -> "Samples":
+        """Returns a Samples object with samples from both self and other, without merging attributes
+
+        If a sample is in both 'self' and 'other', the sample from 'other' is prefered.
+        """
+        samples = deepcopy(self)
+        samples |= other
+        return samples
+
+    def __ior__(self, other: "Samples") -> "Samples":
         if self.__class__.__name__ != other.__class__.__name__:
             raise MergeSamplesTypeError(f"Cannot merge {self.__class__} with {other.__class__}")
 
-        samples = deepcopy(self)
         for sample in other:
-            samples[sample.uuid] = sample
+            self[sample.uuid] = sample
 
-        return samples
+        return self
 
     def __and__(self, other: "Samples") -> "Samples":
+        """Returns a Samples object with samples from both self and other, merging attributes."""
         samples = deepcopy(self)
+        samples &= other
+        return samples
+
+
+    def __iand__(self, other: "Samples") -> "Samples":
+        if self.__class__.__name__ != other.__class__.__name__:
+            raise MergeSamplesTypeError(f"Cannot merge {self.__class__} with {other.__class__}")
+
         for field_ in fields_dict(self.__class__):
             self_ = getattr(self, field_)
             other_ = getattr(other, field_)
-            setattr(samples, field_, self.merge(field_, self_, other_))
+            setattr(self, field_, self.merge(field_, self_, other_))
+        return self
+
+    def __xor__(self, other: "Samples") -> "Samples":
+        """Replace all attributes nd samples in 'self' with those from 'other', effectively
+        replacing 'self' with a copy of 'other'.
+        """
+        samples = deepcopy(self)
+        samples ^= other
         return samples
+
+
+    def __ixor__(self, other: "Samples") -> "Samples":
+        if self.__class__.__name__ != other.__class__.__name__:
+            raise MergeSamplesTypeError(f"Cannot merge {self.__class__} with {other.__class__}")
+
+        for field_ in fields_dict(self.__class__):
+            other_ = getattr(other, field_)
+            setattr(self, field_, other_)
+        return self
 
     @merge.register("data")
     @staticmethod

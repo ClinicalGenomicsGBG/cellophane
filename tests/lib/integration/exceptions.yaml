@@ -61,7 +61,7 @@
     --samples_file: samples.yaml
     --workdir: out
   logs:
-    - "Unhandled exception when collecting results: Exception('DUMMY')"
+    - "Caught exception when merging samples: Exception('DUMMY')"
 
 - id: keyboard_interrupt
   structure:

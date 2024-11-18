@@ -359,7 +359,7 @@ class Samples(UserList[S]):
         return self
 
     def __xor__(self, other: "Samples") -> "Samples":
-        """Replace all attributes nd samples in 'self' with those from 'other', effectively
+        """Replace all attributes and samples in 'self' with those from 'other', effectively
         replacing 'self' with a copy of 'other'.
         """
         samples = deepcopy(self)
@@ -541,9 +541,10 @@ class Samples(UserList[S]):
             Class: A new instance of the class with only the samples with files.
 
         """
-        return self.__class__(
-            [sample for sample in self if sample.files and all(Path(f).exists() for f in sample.files)]
-        )
+        instance = deepcopy(self)
+        instance.data = [sample for sample in self if sample.files and all(Path(f).exists() for f in sample.files)]
+
+        return instance
 
     @property
     def without_files(self) -> "Samples":
@@ -554,9 +555,10 @@ class Samples(UserList[S]):
             Class: A new instance of the class with only the samples without files.
 
         """
-        return self.__class__(
-            [sample for sample in self if not sample.files or any(not Path(f).exists() for f in sample.files)]
-        )
+        instance = deepcopy(self)
+        instance.data = [sample for sample in self if not sample.files or any(not Path(f).exists() for f in sample.files)]
+
+        return instance
 
     @property
     def complete(self) -> "Samples":
@@ -570,10 +572,10 @@ class Samples(UserList[S]):
             Class: A new instance of the class with only the completed samples.
 
         """
-        return self.__class__(
-            [sample for sample in self if sample.processed and not sample.failed],
-            output=self.output,
-        )
+        instance = deepcopy(self)
+        instance.data = [sample for sample in self if sample.processed and not sample.failed]
+
+        return instance
 
     @property
     def unprocessed(self) -> "Samples":
@@ -587,10 +589,10 @@ class Samples(UserList[S]):
             Class: A new instance of the class with only the completed samples.
 
         """
-        return self.__class__(
-            [sample for sample in self if not sample.failed and not sample.processed],
-            output=self.output,
-        )
+        instance = deepcopy(self)
+        instance.data = [sample for sample in self if not sample.failed and not sample.processed]
+
+        return instance
 
     @property
     def failed(self) -> "Samples":
@@ -604,4 +606,7 @@ class Samples(UserList[S]):
             Class: A new instance of the class with only the failed samples.
 
         """
-        return self.__class__([sample for sample in self if sample.failed])
+        instance = deepcopy(self)
+        instance.data = [sample for sample in self if sample.failed]
+
+        return instance

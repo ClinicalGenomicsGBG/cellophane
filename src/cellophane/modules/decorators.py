@@ -96,6 +96,7 @@ def runner(
 
 def pre_hook(
     label: str | None = None,
+    per: Literal["session", "runner"] = "session",
     before: DEPENDENCY_TYPE = None,
     after: DEPENDENCY_TYPE = None,
 ) -> Callable:
@@ -121,6 +122,7 @@ def pre_hook(
             func=func,
             when="pre",
             condition="always",
+            per=per if per in ("session", "runner") else "session",
             before=before,
             after=after,
         )
@@ -131,6 +133,7 @@ def pre_hook(
 def post_hook(
     label: str | None = None,
     condition: Literal["always", "complete", "failed"] = "always",
+    per: Literal["session", "sample", "runner"] = "session",
     before: DEPENDENCY_TYPE = None,
     after: DEPENDENCY_TYPE = None,
 ) -> Callable:
@@ -145,6 +148,12 @@ def post_hook(
             - "complete": The post-hook will recieve only completed samples.
             - "failed": The post-hook will recieve only failed samples.
             Defaults to "always".
+        per (Literal["session", "sample", "runner"]): The level at which the hook
+            will be executed.
+            - "session": The hook will be executed after all runners are complete.
+            - "sample": The hook will be executed when all runners finish processing
+                an individual sample.
+            - "runner": The hook will be executed upon completion of a single runner.
         before (list[str] | Literal["all"] | None): List of post-hooks guaranteed to
             execute after the resulting pre-hook. Defaults to an empty list.
         after (list[str] | Literal["all"] | None): List of post-hooks guaratneed to
@@ -164,6 +173,7 @@ def post_hook(
             func=func,
             when="post",
             condition=condition,
+            per=per if per in ("session", "sample", "runner") else "session",
             before=before,
             after=after,
         )

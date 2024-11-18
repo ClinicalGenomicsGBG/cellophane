@@ -7,8 +7,10 @@ from multiprocessing import Queue
 from pathlib import Path
 from typing import Callable, Literal, Sequence
 
+from mpire.exception import InterruptWorker
+
 from cellophane.cfg import Config
-from cellophane.cleanup import Cleaner
+from cellophane.cleanup import Cleaner, DeferredCleaner
 from cellophane.data import Samples
 from cellophane.executors import Executor
 from cellophane.util import Timestamp
@@ -35,6 +37,7 @@ class Hook:
     condition: Literal["always", "complete", "failed"]
     before: DEPENDENCY_TYPE
     after: DEPENDENCY_TYPE
+    per: Literal["session", "sample", "runner"] = "session"
 
     def __init__(
         self,
@@ -44,6 +47,7 @@ class Hook:
         condition: Literal["always", "complete", "failed"] = "always",
         before: DEPENDENCY_TYPE = None,
         after: DEPENDENCY_TYPE = None,
+        per: Literal["session", "sample", "runner"] = "session",
     ) -> None:
         if isinstance(before, str) and before != "all":
             before = [before]
@@ -83,6 +87,7 @@ class Hook:
         self.condition = condition
         self.func = staticmethod(func)
         self.when = when
+        self.per = per
 
     def __call__(
         self,
@@ -166,13 +171,14 @@ def run_hooks(
     hooks: Sequence[Hook],
     *,
     when: Literal["pre", "post"],
+    per: Literal["session", "sample", "runner"],
     samples: Samples,
     config: Config,
     root: Path,
     executor_cls: type[Executor],
     log_queue: Queue,
     timestamp: Timestamp,
-    cleaner: Cleaner,
+    cleaner: Cleaner | DeferredCleaner,
     logger: LoggerAdapter,
 ) -> Samples:
     """Run hooks at the specified time and update the samples object.
@@ -191,7 +197,7 @@ def run_hooks(
     """
     samples_ = deepcopy(samples)
 
-    for hook in [h for h in hooks if h.when == when]:
+    for hook in [h for h in hooks if (h.when, h.per) == (when, per)]:
         hook_ = partial(
             hook,
             config=config,
@@ -205,7 +211,7 @@ def run_hooks(
             # Catch exceptions to allow post-hooks to run even if a pre-hook fails
             try:
                 samples_ = hook_(samples=samples_)
-            except KeyboardInterrupt:
+            except (KeyboardInterrupt, InterruptWorker):
                 logger.warning("Keyboard interrupt received, failing samples and stopping execution")
                 for sample in samples_:
                     sample.fail(f"Hook {hook.name} interrupted")

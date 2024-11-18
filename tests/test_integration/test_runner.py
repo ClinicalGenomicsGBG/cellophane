@@ -119,7 +119,7 @@ class Test_runners(BaseTest):
     )
     def test_results_exception(self, invocation: Invocation) -> None:
         assert invocation.logs == literal(
-            "Unhandled exception when collecting results: Exception('DUMMY')"
+            "Exception when merging samples: Exception('DUMMY')"
         )
 
     @mark.override(

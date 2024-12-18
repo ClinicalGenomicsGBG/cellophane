@@ -1,7 +1,6 @@
 """Main cellophane entry point wrapper."""
 
 import time
-from contextlib import contextmanager
 from importlib.metadata import version
 from importlib.util import find_spec
 from logging import LoggerAdapter, getLogger
@@ -13,19 +12,19 @@ import rich_click as click
 from humanfriendly import format_timespan
 from ruamel.yaml.error import YAMLError
 
-from cellophane.src import executors
-from cellophane.src.cfg import Config, Schema, with_options
-from cellophane.src.cleanup import Cleaner
-from cellophane.src.data import OutputGlob, Sample, Samples
-from cellophane.src.executors import Executor
-from cellophane.src.logs import (
+from cellophane import executors
+from cellophane.cfg import Config, Schema, with_options
+from cellophane.cleanup import Cleaner
+from cellophane.data import OutputGlob, Sample, Samples
+from cellophane.executors import Executor
+from cellophane.logs import (
     ExternalFilter,
     handle_warnings,
     setup_console_handler,
     setup_file_handler,
     start_logging_queue_listener,
 )
-from cellophane.src.modules import Hook, Runner, load, run_hooks, start_runners
+from cellophane.modules import Hook, Runner, load, run_hooks, start_runners
 
 spec = find_spec("cellophane")
 CELLOPHANE_ROOT = Path(spec.origin).parent  # type: ignore[union-attr, arg-type]
@@ -88,12 +87,9 @@ def cellophane(label: str, root: Path) -> click.Command:
         @with_options(schema)
         def inner(config: Config, **_: Any) -> None:
             """Run cellophane"""
-            start_time = time.time()
-            timestamp = time.strftime(
-                "%Y%m%d_%H%M%S",
-                time.localtime(start_time),
-            )
-            config.tag = config.tag or timestamp
+            start_time = time.localtime()
+            config.tag = config.tag or time.strftime("%y%m%d-%H%M%S", start_time)
+
             handle_warnings()
             console_handler.setLevel(config.log.level)
             file_handler = setup_file_handler(
@@ -132,7 +128,7 @@ def cellophane(label: str, root: Path) -> click.Command:
                     log_queue=log_queue,
                     root=root,
                     executor_cls=executor_cls,
-                    timestamp=timestamp,
+                    timestamp=start_time,
                 )
 
             except Exception as exc:
@@ -140,7 +136,7 @@ def cellophane(label: str, root: Path) -> click.Command:
                 log_listener.stop()
                 raise SystemExit(1) from exc
 
-            time_elapsed = format_timespan(time.time() - start_time)
+            time_elapsed = format_timespan(time.time() - time.mktime(start_time))
             logger.info(f"Execution complete in {time_elapsed}")
             log_listener.stop()
 
@@ -160,7 +156,7 @@ def _main(
     config: Config,
     root: Path,
     executor_cls: type[Executor],
-    timestamp: str,
+    timestamp: time.struct_time,
 ) -> None:
     """Run cellophane"""
     # Load samples from file, or create empty samples object
@@ -223,7 +219,7 @@ def _main(
     )
 
     # If there are failed samples, unregister the workdir from the cleaner
-    if samples.failed:
+    if samples.failed or not config.clean:
         cleaner.unregister(config.workdir / config.tag)
     cleaner.clean(logger=logger)
     # If not post-hook has copied the outputs, warn the user

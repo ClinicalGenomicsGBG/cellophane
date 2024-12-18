@@ -1,15 +1,15 @@
 """Tests for the data module."""
 
 # pylint: disable=pointless-statement
+import time
 from copy import deepcopy
 from pathlib import Path
 from typing import ClassVar
 
 import dill
 from attrs import define, field
+from cellophane import data
 from pytest import FixtureRequest, MonkeyPatch, fixture, mark, param, raises
-
-from cellophane.src import data
 
 LIB = Path(__file__).parent / "lib"
 
@@ -595,6 +595,20 @@ class Test_OutputGlob:
                 [],
                 id="no_match",
             ),
+            param(
+                {"src": "workdir/x_a", "dst_dir": "foo/bar_%y%m%d", "dst_name": None},
+                [
+                    data.Output(src="workdir/x_a", dst="resultdir/foo/bar_690420/x_a"),
+                ],
+                id="timestamp_dst_dir",
+            ),
+            param(
+                {"src": "workdir/x_a", "dst_dir": None, "dst_name": "RENAME_%y%m%d"},
+                [
+                    data.Output(src="workdir/x_a", dst="resultdir/RENAME_690420"),
+                ],
+                id="timestamp_dst_name",
+            ),
         ],
         indirect=["expected_outputs"],
     )
@@ -621,5 +635,6 @@ class Test_OutputGlob:
             samples=[None],  # type: ignore[arg-type]
             workdir=Path("workdir"),
             config=config,
+            timestamp=time.localtime(-22122000.0),
         )
         assert outputs == expected_outputs

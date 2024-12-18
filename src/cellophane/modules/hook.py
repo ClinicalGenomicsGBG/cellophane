@@ -1,3 +1,4 @@
+import time
 from copy import deepcopy
 from functools import partial
 from logging import LoggerAdapter, getLogger
@@ -7,10 +8,10 @@ from typing import Callable, Literal, Sequence
 
 from graphlib import TopologicalSorter
 
-from cellophane.src.cfg import Config
-from cellophane.src.cleanup import Cleaner
-from cellophane.src.data import Samples
-from cellophane.src.executors import Executor
+from cellophane.cfg import Config
+from cellophane.cleanup import Cleaner
+from cellophane.data import Samples
+from cellophane.executors import Executor
 
 
 class Hook:
@@ -79,7 +80,7 @@ class Hook:
         root: Path,
         executor_cls: type[Executor],
         log_queue: Queue,
-        timestamp: str,
+        timestamp: time.struct_time,
         cleaner: Cleaner,
     ) -> Samples:
         logger = LoggerAdapter(getLogger(), {"label": self.label})
@@ -152,7 +153,7 @@ def run_hooks(
     root: Path,
     executor_cls: type[Executor],
     log_queue: Queue,
-    timestamp: str,
+    timestamp: time.struct_time,
     cleaner: Cleaner,
     logger: LoggerAdapter,
 ) -> Samples:

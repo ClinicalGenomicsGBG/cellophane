@@ -1,5 +1,6 @@
 """Runners for executing functions as jobs."""
 
+import time
 from functools import partial, reduce
 from logging import LoggerAdapter, getLogger
 from multiprocessing import Queue
@@ -10,11 +11,11 @@ from mpire import WorkerPool
 from mpire.exception import InterruptWorker
 from psutil import Process, TimeoutExpired
 
-from cellophane.src.cfg import Config
-from cellophane.src.cleanup import Cleaner, DeferredCleaner
-from cellophane.src.data import OutputGlob, Samples
-from cellophane.src.executors import Executor
-from cellophane.src.logs import handle_warnings, redirect_logging_to_queue
+from cellophane.cfg import Config
+from cellophane.cleanup import Cleaner, DeferredCleaner
+from cellophane.data import OutputGlob, Samples
+from cellophane.executors import Executor
+from cellophane.logs import handle_warnings, redirect_logging_to_queue
 
 from .checkpoint import Checkpoints
 
@@ -59,7 +60,7 @@ class Runner:
         root: Path,
         samples: Samples,
         executor_cls: type[Executor],
-        timestamp: str,
+        timestamp: time.struct_time,
         workdir: Path,
     ) -> tuple[Samples, DeferredCleaner]:
         handle_warnings()
@@ -128,7 +129,7 @@ class Runner:
                 logger.warning(f"Unhandeled exception: {exc!r}", exc_info=exc)
                 cleanup(reason=f"Unhandeled exception in runner '{self.name}' {exc!r}")
 
-        _resolve_outputs(samples, workdir, config, logger)
+        _resolve_outputs(samples, workdir, config, timestamp, logger)
         for sample in samples.complete:
             logger.debug(f"Sample {sample.id} processed successfully")
         for sample in samples.unprocessed:
@@ -146,6 +147,7 @@ def _resolve_outputs(
     samples: Samples,
     workdir: Path,
     config: Config,
+    timestamp: time.struct_time,
     logger: LoggerAdapter,
 ) -> None:
     for output_ in samples.output.copy():
@@ -159,6 +161,7 @@ def _resolve_outputs(
                 samples=samples.complete,
                 workdir=workdir,
                 config=config,
+                timestamp=timestamp,
             )
         except Exception as exc:  # pylint: disable=broad-except
             logger.warning(f"Failed to resolve output {output_}: {exc!r}")
@@ -197,7 +200,7 @@ def start_runners(
     config: Config,
     root: Path,
     executor_cls: type[Executor],
-    timestamp: str,
+    timestamp: time.struct_time,
     cleaner: Cleaner,
 ) -> Samples:
     """Start cellphane runners in parallel and collect the results.

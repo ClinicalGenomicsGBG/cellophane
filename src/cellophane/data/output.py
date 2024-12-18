@@ -1,5 +1,6 @@
 """Outut classes for copying files to another directory."""
 
+import time
 from glob import glob
 from pathlib import Path
 from typing import Iterable
@@ -88,6 +89,7 @@ class OutputGlob:  # type: ignore[no-untyped-def]
         samples: Iterable,
         workdir: Path,
         config: Container,
+        timestamp: time.struct_time,
     ) -> set[Output]:
         """Resolve the glob pattern to a list of files to be copied.
 
@@ -126,25 +128,29 @@ class OutputGlob:  # type: ignore[no-untyped-def]
                 warn(f"No files matched pattern '{pattern}'")
 
             for m in matches:
-                match self.dst_dir:
-                    case str(d) if Path(d).is_absolute():
-                        dst_dir = Path(d.format(**meta))
-                    case str(d):
-                        dst_dir = config.resultdir / d.format(**meta)
-                    case _:
-                        dst_dir = config.resultdir
+                if self.dst_dir is None:
+                    dst_dir = config.resultdir
+                else:
+                    _dst_dir = self.dst_dir.format(**meta)
+                    _dst_dir = time.strftime(_dst_dir, timestamp)
 
-                match self.dst_name:
-                    case None:
-                        dst_name = m.name
-                    case _ if len(matches) > 1:
-                        warn(
-                            f"Destination name {self.dst_name} will be ignored "
-                            f"as '{self.src}' matches multiple files",
-                        )
-                        dst_name = m.name
-                    case str() as n:
-                        dst_name = n.format(**meta)
+                    if Path(_dst_dir).is_absolute():
+                        dst_dir = Path(_dst_dir)
+                    else:
+                        dst_dir = config.resultdir / _dst_dir
+
+
+                if self.dst_name is None:
+                    dst_name = m.name
+                elif len(matches) > 1:
+                    warn(
+                        f"Destination name {self.dst_name} will be ignored "
+                        f"as '{self.src}' matches multiple files",
+                    )
+                    dst_name = m.name
+                else:
+                    dst_name = self.dst_name.format(**meta)
+                    dst_name = time.strftime(dst_name, timestamp)
 
                 dst = Path(dst_dir) / dst_name
 

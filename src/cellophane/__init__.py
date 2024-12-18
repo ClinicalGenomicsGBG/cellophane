@@ -1,12 +1,13 @@
 """Cellophane: A library for writing modular wrappers"""
 
-from .cellophane import CELLOPHANE_ROOT, CELLOPHANE_VERSION, cellophane
 from . import cfg, data, executors, logs, modules, util
+from .cellophane import CELLOPHANE_ROOT, CELLOPHANE_VERSION, cellophane
 from .cfg import Config, Schema
 from .cleanup import Cleaner
 from .data import Output, OutputGlob, Sample, Samples
 from .executors import Executor
 from .modules import Checkpoint, Checkpoints, output, post_hook, pre_hook, runner
+from .util import Timestamp
 
 __all__ = [
     "CELLOPHANE_ROOT",
@@ -38,4 +39,6 @@ __all__ = [
     "Checkpoints",
     # cleanup
     "Cleaner",
+    # util
+    "Timestamp",
 ]

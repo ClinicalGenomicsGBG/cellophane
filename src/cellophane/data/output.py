@@ -9,8 +9,9 @@ from warnings import warn
 from attrs import define, field
 from attrs.setters import convert
 
+from cellophane.util import Timestamp
+
 from .container import Container
-from .util import Timestamp
 
 
 @define
@@ -90,7 +91,7 @@ class OutputGlob:  # type: ignore[no-untyped-def]
         samples: Iterable,
         workdir: Path,
         config: Container,
-        timestamp: time.struct_time,
+        timestamp: Timestamp,
     ) -> set[Output]:
         """Resolve the glob pattern to a list of files to be copied.
 
@@ -115,7 +116,7 @@ class OutputGlob:  # type: ignore[no-untyped-def]
                 "config": config,
                 "workdir": workdir,
                 "sample": sample,
-                "timestamp": Timestamp(ref=timestamp),
+                "timestamp": timestamp,
             }
 
             match self.src.format(**meta):

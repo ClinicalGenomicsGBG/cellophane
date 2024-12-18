@@ -8,7 +8,7 @@ from typing import ClassVar
 
 import dill
 from attrs import define, field
-from cellophane import data
+from cellophane import Timestamp, data
 from pytest import FixtureRequest, MonkeyPatch, fixture, mark, param, raises
 
 LIB = Path(__file__).parent / "lib"
@@ -484,7 +484,7 @@ class Test_OutputGlob:
         return {
             "_workdir": tmp_path / "workdir",
             "_resultdir": tmp_path / "resultdir",
-            "timestamp": data.util.Timestamp(time.gmtime(-22069583))
+            "timestamp": Timestamp(time.gmtime(-22069583))
         }
 
     @fixture(scope="function")

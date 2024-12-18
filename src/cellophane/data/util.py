@@ -1,10 +1,7 @@
 """Utility functions for data manipulation."""
 
-import time
 from pathlib import Path
 from typing import Any
-
-from attrs import define
 
 from .container import Container
 
@@ -64,14 +61,3 @@ def convert_path_list(data: list[str | Path]) -> list[Path]:
 
     """
     return [Path(p) for p in data]
-
-
-@define
-class Timestamp():
-    ref: time.struct_time
-
-    def __getitem__(self, key: str) -> str:
-        return time.strftime(key, self.ref)
-
-    def __str__(self) -> str:
-        return self['%Y%m%d-%H%M%S']

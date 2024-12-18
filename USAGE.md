@@ -95,7 +95,7 @@ Argument    | Type                    | Description
 ------------|-------------------------|-------------
 `samples`   | `cellophane.Samples`    | Samples to process.
 `config`    | `cellophane.Config`     | Wrapper configuration.
-`timestamp` | `time.struct_time`      | Pipeline starting time.
+`timestamp` | `cellophane.Timestamp`  | Pipeline starting time.
 `logger`    | `logging.LoggerAdapter` | A logger that can be used to log messages.
 `root`      | `pathlib.Path`          | A `pathlib.Path` pointing to the root directory of the wrapper repository.
 `workdir`   | `pathlib.Path`          | A `pathlib.Path` pointing to the working directory of the hook.
@@ -127,7 +127,7 @@ Argument      | Type                     | Description
 --------------|--------------------------|-------------
 `samples`     | `cellophane.Samples`     | Samples to process.
 `config`      | `cellophane.Config`      | Wrapper configuration.
-`timestamp`   | `time.struct_time`       | Pipeline starting time.
+`timestamp`   | `cellophane.Timestamp`   | Pipeline starting time.
 `logger`      | `logging.LoggerAdapter`  | A logger that can be used to log messages.
 `root`        | `pathlib.Path`           | A `pathlib.Path` pointing to the root directory of the wrapper.
 `workdir`     | `pathlib.Path`           | A `pathlib.Path` pointing to the working directory of the runner.
@@ -153,6 +153,7 @@ Argument      | Type              | Description
 `label`       | `str`             | A label for the pre-hook to use in logs. If not specified, the function name will be used. Note that the hook name (used in `before`/`after`) will always be the same as the function name.
 `before`      | `str\|list[str]` | A name or list of names specifying which pre-hooks this pre-hook will run before. If `before` is set to `"all"`, the pre-hook will run before all other pre-hooks.
 `after`       | `str\|list[str]` | A name or list of names specifying which pre-hooks will run before this pre-hook. If `after` is set to `"all"`, the pre-hook will run after all other pre-hooks.
+
 ---
 
 At runtime, the decorated function (hook) will be called with the following keyword arguments:
@@ -161,7 +162,7 @@ Argument    | Type                    | Description
 ------------|-------------------------|-------------
 `samples`   | `cellophane.Samples`    | Samples to process.
 `config`    | `cellophane.Config`     | Wrapper configuration.
-`timestamp` | `time.struct_time`      | Pipeline starting time.
+`timestamp` | `cellophane.Timestamp`  | Pipeline starting time.
 `logger`    | `logging.LoggerAdapter` | A logger that can be used to log messages.
 `root`      | `pathlib.Path`          | A `pathlib.Path` pointing to the root directory of the wrapper repository.
 `workdir`   | `pathlib.Path`          | A `pathlib.Path` pointing to the working directory of the hook.

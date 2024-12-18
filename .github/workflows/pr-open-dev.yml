@@ -5,7 +5,7 @@ name: PR Opened/Edit/Reopened on Dev
 permissions: read-all
 
 on: # yamllint disable-line rule:truthy
-  pull_request_target:
+  pull_request:
     types: [opened, reopened, edited, synchronize]
     branches: [dev]
 
@@ -25,6 +25,7 @@ jobs:
     with:
       head: ${{ github.event.pull_request.head.sha }}
       pr-head-sha: ${{ github.event.pull_request.head.sha }}
+      publish-results: false
 
   reviewdog-lint:
     name: Lint code

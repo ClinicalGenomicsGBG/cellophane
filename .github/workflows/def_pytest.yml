@@ -14,6 +14,9 @@ on: # yamllint disable-line rule:truthy
       pr-head-sha:
         required: true
         type: string
+      publish-results:
+        type: boolean
+        default: true
 
 jobs:
   pytest:
@@ -35,8 +38,14 @@ jobs:
         run: poetry install
       - name: pytest
         run: poetry run pytest --junit-xml=pytest.xml
+      - uses: actions/upload-artifact@v4
+        if: (!cancelled())
+        with:
+          name: pytest.xml
+          path: pytest.xml
+          retention-days: 1
       - uses: EnricoMi/publish-unit-test-result-action@v2
-        if: always()
+        if: (!cancelled() && inputs.publish-results)
         with:
           files: pytest.xml
           commit: ${{ inputs.pr-head-sha }}

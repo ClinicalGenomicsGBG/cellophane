@@ -327,22 +327,57 @@ class Samples(UserList[S]):
         return (_reconstruct, (Samples, self._mixins, args, kwargs, state, cls_kwargs))
 
     def __or__(self, other: "Samples") -> "Samples":
+        """Returns a Samples object with samples from both self and other, without merging attributes
+
+        If a sample is in both 'self' and 'other', the sample from 'other' is prefered.
+        """
+        samples = deepcopy(self)
+        samples |= other
+        return samples
+
+    def __ior__(self, other: "Samples") -> "Samples":
         if self.__class__.__name__ != other.__class__.__name__:
             raise MergeSamplesTypeError(f"Cannot merge {self.__class__} with {other.__class__}")
 
-        samples = deepcopy(self)
         for sample in other:
-            samples[sample.uuid] = sample
+            self[sample.uuid] = sample
 
-        return samples
+        return self
 
     def __and__(self, other: "Samples") -> "Samples":
+        """Returns a Samples object with samples from both self and other, merging attributes."""
         samples = deepcopy(self)
+        samples &= other
+        return samples
+
+
+    def __iand__(self, other: "Samples") -> "Samples":
+        if self.__class__.__name__ != other.__class__.__name__:
+            raise MergeSamplesTypeError(f"Cannot merge {self.__class__} with {other.__class__}")
+
         for field_ in fields_dict(self.__class__):
             self_ = getattr(self, field_)
             other_ = getattr(other, field_)
-            setattr(samples, field_, self.merge(field_, self_, other_))
+            setattr(self, field_, self.merge(field_, self_, other_))
+        return self
+
+    def __xor__(self, other: "Samples") -> "Samples":
+        """Replace all attributes and samples in 'self' with those from 'other', effectively
+        replacing 'self' with a copy of 'other'.
+        """
+        samples = deepcopy(self)
+        samples ^= other
         return samples
+
+
+    def __ixor__(self, other: "Samples") -> "Samples":
+        if self.__class__.__name__ != other.__class__.__name__:
+            raise MergeSamplesTypeError(f"Cannot merge {self.__class__} with {other.__class__}")
+
+        for field_ in fields_dict(self.__class__):
+            other_ = getattr(other, field_)
+            setattr(self, field_, other_)
+        return self
 
     @merge.register("data")
     @staticmethod
@@ -419,7 +454,7 @@ class Samples(UserList[S]):
         """
         return type(cls.__name__, (cls,), {"sample_class": sample_class})
 
-    def split(self, by: str | None = "uuid") -> Iterable[tuple[Any, "Samples[Sample]"]]:
+    def split(self, by: str | None = "uuid") -> Iterable[tuple[Any, "Samples[S]"]]:
         """Splits the data into groups based on the specified attribute value.
 
         Args:
@@ -510,13 +545,14 @@ class Samples(UserList[S]):
             Class: A new instance of the class with only the samples with files.
 
         """
-        return self.__class__(
-            [
-                sample
-                for sample in self
-                if sample.files and all(Path(f).exists() for f in sample.files)
-            ],
-        )
+        instance = deepcopy(self)
+        instance.data = [
+            sample
+            for sample in self
+            if sample.files and all(Path(f).exists() for f in sample.files)
+        ]
+
+        return instance
 
     @property
     def without_files(self) -> "Samples":
@@ -527,13 +563,14 @@ class Samples(UserList[S]):
             Class: A new instance of the class with only the samples without files.
 
         """
-        return self.__class__(
-            [
-                sample
-                for sample in self
-                if not sample.files or any(not Path(f).exists() for f in sample.files)
-            ],
-        )
+        instance = deepcopy(self)
+        instance.data = [
+            sample
+            for sample in self
+            if not sample.files or any(not Path(f).exists() for f in sample.files)
+        ]
+
+        return instance
 
     @property
     def complete(self) -> "Samples":
@@ -547,9 +584,10 @@ class Samples(UserList[S]):
             Class: A new instance of the class with only the completed samples.
 
         """
-        return self.__class__(
-            [sample for sample in self if sample.processed and not sample.failed], output=self.output,
-        )
+        instance = deepcopy(self)
+        instance.data = [sample for sample in self if sample.processed and not sample.failed]
+
+        return instance
 
     @property
     def unprocessed(self) -> "Samples":
@@ -563,9 +601,10 @@ class Samples(UserList[S]):
             Class: A new instance of the class with only the completed samples.
 
         """
-        return self.__class__(
-            [sample for sample in self if not sample.failed and not sample.processed], output=self.output,
-        )
+        instance = deepcopy(self)
+        instance.data = [sample for sample in self if not sample.failed and not sample.processed]
+
+        return instance
 
     @property
     def failed(self) -> "Samples":
@@ -579,4 +618,7 @@ class Samples(UserList[S]):
             Class: A new instance of the class with only the failed samples.
 
         """
-        return self.__class__([sample for sample in self if sample.failed])
+        instance = deepcopy(self)
+        instance.data = [sample for sample in self if sample.failed]
+
+        return instance

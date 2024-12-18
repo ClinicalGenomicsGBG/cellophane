@@ -174,6 +174,7 @@ def _main(
     samples = run_hooks(
         hooks,
         when="pre",
+        per="session",
         samples=samples,
         log_queue=log_queue,
         config=config,
@@ -202,12 +203,14 @@ def _main(
         executor_cls=executor_cls,
         timestamp=timestamp,
         cleaner=cleaner,
+        hooks=hooks,
     ) | samples.failed
 
     # Run post-hooks
     samples = run_hooks(
         hooks,
         when="post",
+        per="session",
         samples=samples,
         config=config,
         log_queue=log_queue,

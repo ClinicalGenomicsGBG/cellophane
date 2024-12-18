@@ -191,4 +191,4 @@
     --workdir: out
     --tag: DUMMY
   logs:
-  - "Unhandled exception when collecting results: ValueError('Invalid action: DUMMY')"
+  - "Caught exception when merging cleaners: ValueError('Invalid action: DUMMY')"

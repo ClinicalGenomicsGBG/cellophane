@@ -400,20 +400,15 @@ class Test_Samples:
     def test_and() -> None:
         """Test __and__."""
 
-        class _SamplesSubA(data.Samples):
-            pass
 
-        class _SamplesSubB(data.Samples):
-            pass
-
-        _samples_a1 = _SamplesSubA(
+        _samples_a1: data.Samples = data.Samples(
             [
                 data.Sample(id="a1_1", files=["a1_1"]),
                 data.Sample(id="a1_2", files=["a1_2"]),
             ],
         )
 
-        _samples_a2 = _SamplesSubA(
+        _samples_a2: data.Samples = data.Samples(
             [
                 data.Sample(id="a2_1", files=["a2_1"]),
                 data.Sample(id="a2_2", files=["a2_2"]),

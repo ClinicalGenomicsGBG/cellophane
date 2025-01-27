@@ -11,6 +11,7 @@ from cellophane.cfg import Config
 from cellophane.cleanup import Cleaner
 from cellophane.data import Samples
 from cellophane.executors import Executor
+from cellophane.util import Timestamp
 
 
 class _AFTER_ALL: ...
@@ -88,7 +89,7 @@ class Hook:
         root: Path,
         executor_cls: type[Executor],
         log_queue: Queue,
-        timestamp: time.struct_time,
+        timestamp: Timestamp,
         cleaner: Cleaner,
     ) -> Samples:
         logger = LoggerAdapter(getLogger(), {"label": self.label})
@@ -162,7 +163,7 @@ def run_hooks(
     root: Path,
     executor_cls: type[Executor],
     log_queue: Queue,
-    timestamp: time.struct_time,
+    timestamp: Timestamp,
     cleaner: Cleaner,
     logger: LoggerAdapter,
 ) -> Samples:

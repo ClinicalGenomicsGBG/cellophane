@@ -1,3 +1,5 @@
+from time import gmtime
+
 from cellophane.testing import BaseTest, Invocation, literal, regex
 
 
@@ -40,6 +42,10 @@ class Test_outputs(BaseTest):
             @output("missing.txt")
             @output("glob/*.txt", dst_name="invalid_rename.txt")
             @output("single.txt", dst_name="rename.txt")
+            @output("glob/*.txt", dst_dir="timestamp_fmt_dir_{timestamp[%H%M%S]}")
+            @output("single.txt", dst_name="timestamp_fmt_name_{timestamp[%H%M%S]}.txt")
+            @output("glob/*.txt", dst_dir="timestamp_dir_{timestamp}")
+            @output("single.txt", dst_name="timestamp_name_{timestamp}.txt")
             @output("overwrite_a.txt", dst_name="overwrite.txt")
             @output("overwrite_b.txt", dst_name="overwrite.txt")
             @output("nested/**/*.txt")
@@ -82,10 +88,11 @@ class Test_outputs(BaseTest):
         "input/a.txt": "INPUT_A",
         "input/b.txt": "INPUT_B",
     }
+    mocks = {"cellophane.util.timestamp.localtime": {"new": lambda *_: gmtime(1092587022.0)}}
 
     def test_outputs(self, invocation: Invocation) -> None:
         assert invocation.logs == literal(
-            "Copying 17 outputs",
+            "Copying 23 outputs",
             "Copying out/DUMMY/runner_a/single.txt to out/results/single.txt",
             "Copying out/DUMMY/runner_a/sample_a.txt to out/results/sample_a.txt",
             "Copying out/DUMMY/runner_a/sample_b.txt to out/results/sample_b.txt",
@@ -93,6 +100,12 @@ class Test_outputs(BaseTest):
             "Copying out/DUMMY/runner_a/glob/a.txt to out/results/a.txt",
             "Copying out/DUMMY/runner_a/glob/b.txt to out/results/b.txt",
             "Copying out/DUMMY/runner_a/single.txt to out/results/rename.txt",
+            "Copying out/DUMMY/runner_a/glob/a.txt to out/results/timestamp_dir_040815-162342/a.txt",
+            "Copying out/DUMMY/runner_a/glob/b.txt to out/results/timestamp_dir_040815-162342/b.txt",
+            "Copying out/DUMMY/runner_a/glob/a.txt to out/results/timestamp_fmt_dir_162342/a.txt",
+            "Copying out/DUMMY/runner_a/glob/b.txt to out/results/timestamp_fmt_dir_162342/b.txt",
+            "Copying out/DUMMY/runner_a/single.txt to out/results/timestamp_name_040815-162342.txt",
+            "Copying out/DUMMY/runner_a/single.txt to out/results/timestamp_fmt_name_162342.txt",
             "to out/results/overwrite.txt",
             "out/results/overwrite.txt already exists",
             "Copying out/DUMMY/runner_a/nested/a/x.txt to out/results/x.txt",

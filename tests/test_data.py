@@ -598,14 +598,14 @@ class Test_OutputGlob:
             param(
                 {"src": "workdir/x_a", "dst_dir": "foo/bar_%y%m%d", "dst_name": None},
                 [
-                    data.Output(src="workdir/x_a", dst="resultdir/foo/bar_690420/x_a"),
+                    data.Output(src="workdir/x_a", dst="resultdir/foo/bar_040815/x_a"),
                 ],
                 id="timestamp_dst_dir",
             ),
             param(
                 {"src": "workdir/x_a", "dst_dir": None, "dst_name": "RENAME_%y%m%d"},
                 [
-                    data.Output(src="workdir/x_a", dst="resultdir/RENAME_690420"),
+                    data.Output(src="workdir/x_a", dst="resultdir/RENAME_040815"),
                 ],
                 id="timestamp_dst_name",
             ),
@@ -635,6 +635,6 @@ class Test_OutputGlob:
             samples=[None],  # type: ignore[arg-type]
             workdir=Path("workdir"),
             config=config,
-            timestamp=time.localtime(-22122000.0),
+            timestamp=time.gmtime(1092587022.0),
         )
         assert outputs == expected_outputs

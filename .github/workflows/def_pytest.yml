@@ -34,11 +34,7 @@ jobs:
       - name: rye-sync
         run: rye sync
       - name: pytest
-        env:
-          TERM: dumb
-          COLUMNS: 500
-          TERMINAL_WIDTH: 500
-        run: TERMINAL_WIDTH=500 rye run pytest --junit-xml=pytest.xml
+        run: rye run pytest --junit-xml=pytest.xml
       - uses: actions/upload-artifact@v4
         if: (!cancelled())
         with:

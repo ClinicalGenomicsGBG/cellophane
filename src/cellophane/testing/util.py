@@ -91,7 +91,8 @@ def execute_from_structure(
         _result = runner.invoke(
             cli=_main,
             args=_args,
-            env={"TERMINAL_WIDTH": "500", "COLUMNS": "500", "TERM": "dumb"},
+            env={"TERM": "dumb"},
+            standalone_mode=False,
         )
         _exception = _result.exception
     except (SystemExit, Exception) as exc:  # pylint: disable=broad-except

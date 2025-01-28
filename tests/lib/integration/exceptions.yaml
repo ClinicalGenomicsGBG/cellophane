@@ -23,9 +23,8 @@
   args:
     --workdir: out
     --config_file: missing.yaml
-  output:
-    - "Could not open file 'missing.yaml': [Errno 2] No such file or directory: 'missing.yaml'"
-  exception: SystemExit(1)
+  exception: |-
+    FileError("[Errno 2] No such file or directory: 'missing.yaml'")
 
 - id: merge_exception
   structure:

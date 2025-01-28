@@ -36,9 +36,8 @@
   args:
     --a: "INVALID"
     --workdir: out
-  output:
-    - "Invalid value for '--a': 'INVALID' is not a valid float."
-  exception: SystemExit(2)
+  exception: |-
+    BadParameter("'INVALID' is not a valid float.")
 
 - id: bad_format
   structure:
@@ -50,9 +49,8 @@
   args:
     --a: "INVALID"
     --workdir: out
-  output:
-    - "Invalid value for '--a': 'INVALID' is not a 'email'"
-  exception: SystemExit(2)
+  exception: |-
+    BadParameter("'INVALID' is not a 'email'")
 
 - id: invalid_format
   structure:
@@ -62,7 +60,7 @@
           type: string
           format: INVALID
   args:
-    --workdir: out"
+    --workdir: out
   exception: "ValueError('Invalid format: INVALID')"
 
 - id: good_format
@@ -85,9 +83,8 @@
   args:
     --a: "INVALID"
     --workdir: out
-  output:
-    - "Invalid value for '--a': Expected a comma separated mapping (a=b,x=y), got INVALID"
-  exception: SystemExit(2)
+  exception: |-
+    BadParameter('Expected a comma separated mapping (a=b,x=y), got INVALID')
 
 - id: bad_item_type
   structure:
@@ -100,9 +97,8 @@
   args:
     --a: !!python/tuple ["INVALID"]
     --workdir: out
-  output:
-  - "Invalid value for '--a': could not convert string to float: 'INVALID'"
-  exception: SystemExit(2)
+  exception: |-
+    BadParameter("could not convert string to float: 'INVALID'")
 
 - id: invalid_item_type
   structure:
@@ -125,9 +121,8 @@
   args:
     --a: "INVALID"
     --workdir: out
-  output:
-    - "Invalid value for '--a': Failed to parse size! (input 'INVALID' was tokenized as ['INVALID'])"
-  exception: SystemExit(2)
+  exception: |-
+    BadParameter("Failed to parse size! (input 'INVALID' was tokenized as ['INVALID'])")
 
 - id: good_regex
   structure:
@@ -150,9 +145,8 @@
   args:
     --a: "INVALID"
     --workdir: out
-  output:
-    - "Invalid value for '--a': 'INVALID' does not match pattern: '^[a-z]+$'"
-  exception: SystemExit(2)
+  exception: |-
+    BadParameter("'INVALID' does not match pattern: '^[a-z]+$'")
 
 - &parse_config
   id: parse_config

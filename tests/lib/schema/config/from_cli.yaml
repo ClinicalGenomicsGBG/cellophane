@@ -41,10 +41,10 @@ cli: [
   "--integer", "1337",
   "--number", "13.37",
   "--boolean",
-  "--array", ["one", "two", "three"],
-  "--typed_array", ["1.0", "2.0", "3.0"],
-  "--mapping_array", ["a=X", "b=Y"],
-  "--mapping", "a=X,b=Y",
+  "--array", '["one", "two", "three"]',
+  "--typed_array", '["1.0", "2.0", "3.0"]',
+  "--mapping_array", '[{"a": "X"}, {"b": "Y"}]',
+  "--mapping", '{"a":"X","b":"Y"}',
   "--nested_a_b_c", "Z"
 ]
 

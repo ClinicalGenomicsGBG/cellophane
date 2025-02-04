@@ -14,4 +14,5 @@ flags:
   - key: !!python/tuple [a]
     type: array
     value: [a, b, c]
-    items_type: path
+    items:
+      type: path

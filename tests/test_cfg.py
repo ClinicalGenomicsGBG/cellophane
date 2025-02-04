@@ -31,27 +31,17 @@ class Test_StringMapping:
         "value,expected",
         [
             param(
-                "a=b,c=d",
+                '{"a": "b", "c": "d"}',
                 {"a": "b", "c": "d"},
                 id="simple",
             ),
             param(
-                'a="a",c="d"',
-                {"a": "a", "c": "d"},
-                id="quoted",
-            ),
-            param(
-                "a='a',c='d'",
-                {"a": "a", "c": "d"},
-                id="single quoted",
-            ),
-            param(
-                "a.b.c=d",
+                '{"a": {"b": {"c": "d"}}}',
                 {"a": {"b": {"c": "d"}}},
                 id="nested",
             ),
             param(
-                "",
+                "{}",
                 {},
                 id="empty",
             ),
@@ -71,19 +61,11 @@ class Test_StringMapping:
                 id="invalid string",
             ),
             param(
-                "a=b,c=,d=e",
-                id="missing value",
-            ),
-            param(
-                "a=b,=d,d=e",
+                '{:"b"}',
                 id="missing key",
             ),
             param(
-                "a=b,c=d,e",
-                id="missing separator",
-            ),
-            param(
-                "a=b,!c=d",
+                '{!a: "b"}',
                 id="invalid key",
             ),
         ],
@@ -116,7 +98,7 @@ class Test_TypedArray:
         expected: list[int],
     ) -> None:
         """Test TypedArray.convert."""
-        _array = cfg.click_.TypedArray(item_type)
+        _array = cfg.click_.TypedArray({"type": item_type})
         assert _array.convert(value, None, None) == expected  # type: ignore[arg-type]
 
     @staticmethod
@@ -144,7 +126,7 @@ class Test_TypedArray:
     ) -> None:
         """Test TypedArray.convert exceptions."""
         with raises(exception):
-            _array = cfg.click_.TypedArray(item_type)  # type: ignore[arg-type]
+            _array = cfg.click_.TypedArray({"type": item_type})  # type: ignore[arg-type]
             _array.convert(value, None, None)  # type: ignore[arg-type]
 
 
@@ -301,7 +283,7 @@ class Test_Flag:
                     ("integer", click.IntRange(min=0), {"min": 0}),
                     ("number", float, {}),
                     ("number", click.FloatRange(min=0), {"min": 0}),
-                    ("array", TypedArray("string"), {}),
+                    ("array", TypedArray({"type": "string"}), {}),
                     ("mapping", StringMapping(), {}),
                     ("path", click.Path(), {}),
                     ("size", ParsedSize(), {}),

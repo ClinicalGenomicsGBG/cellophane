@@ -121,10 +121,7 @@ def properties_(
                 "enum": subschema.get("enum"),
                 "description": subschema.get("description"),
                 "secret": subschema.get("secret", False),
-                "items_type": subschema.get("items", {}).get("type"),
-                "items_format": subschema.get("items", {}).get("format"),
-                "items_min": subschema.get("items", {}).get("minimum"),
-                "items_max": subschema.get("items", {}).get("maximum"),
+                "items": subschema.get("items"),
                 "format": subschema.get("format"),
                 "pattern": subschema.get("pattern"),
                 "min": subschema.get("minimum"),
@@ -157,12 +154,7 @@ def required_(
     if instance is not None:
         for prop in required:
             subschema = schema.get("properties", {}).get(prop)
-            if not (
-                subschema is None
-                or "default" in subschema
-                or "properties" in subschema
-                or prop in instance
-            ):
+            if not (subschema is None or "default" in subschema or "properties" in subschema or prop in instance):
                 key = (*(_path or ()), prop)
                 flags[key] = flags.get(key, Flag(key=key))
                 flags[key].required = True

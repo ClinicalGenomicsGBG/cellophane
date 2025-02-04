@@ -2,10 +2,18 @@
 
 import json
 import re
-from ast import literal_eval
-from contextlib import suppress
+from functools import partial
 from pathlib import Path
-from typing import Any, Literal, Mapping, MutableMapping, Type, get_args, overload
+from typing import (
+    Any,
+    Callable,
+    Literal,
+    Mapping,
+    MutableMapping,
+    Type,
+    get_args,
+    overload,
+)
 
 import rich_click as click
 from humanfriendly import format_size, parse_size
@@ -13,15 +21,6 @@ from jsonschema._format import draft7_format_checker
 from jsonschema.exceptions import FormatError
 
 from cellophane import data, util
-
-ITEMS_TYPES = Literal[
-    "string",
-    "number",
-    "integer",
-    "path",
-    "mapping",
-    "size",
-]
 
 SCHEMA_TYPES = Literal[
     "string",
@@ -62,8 +61,7 @@ class InvertibleParamType(click.ParamType):
     """
 
     def invert(self, value: Any) -> str:  # pragma: no cover
-        """Inverts the value back to a string representation.
-        """
+        """Inverts the value back to a string representation."""
         # Excluded from coverage as this is a stub method that should be overridden
         raise NotImplementedError
 
@@ -114,15 +112,6 @@ class StringMapping(InvertibleParamType):
     """
 
     name = "mapping"
-    scanner = re.Scanner(  # type: ignore[attr-defined]
-        [
-            (r'"[^"]*"', lambda _, token: token[1:-1]),
-            (r"'[^']*'", lambda _, token: token[1:-1]),
-            (r"[\w.]+(?==)", lambda _, token: token.strip()),
-            (r"(?<==)[^,]+", lambda _, token: token.strip()),
-            (r"\s*[=,]\s*", lambda *_: None),
-        ],
-    )
 
     def convert(
         self,
@@ -133,11 +122,8 @@ class StringMapping(InvertibleParamType):
         """Converts a string value to a mapping.
 
         This method takes a value and converts it to a mapping.
-        If the value is a string, it is scanned and split into tokens.
-        If the number of tokens is even, the tokens are paired up and
-        converted into a dictionary.
-        If the value is already a mapping and there are no extra tokens,
-        it is returned as is. Otherwise, an error is raised.
+        If the value is a valid JSON string, it is converted to a mapping.
+        If the value is already a mapping, it is returned as is.
 
         Args:
         ----
@@ -158,7 +144,7 @@ class StringMapping(InvertibleParamType):
         -------
             ```python
             converter = Converter()
-            value = "a=1,b=2"
+            value = "{'a': 1, 'b': 2}"
             result = converter.convert(value, None, None)
             print(result)  # {'a': '1', 'b': '2'}
             ```
@@ -168,28 +154,11 @@ class StringMapping(InvertibleParamType):
             return data.PreservedDict(value)
 
         try:
-            tokens, extra = self.scanner.scan(value)
-            if extra or len(tokens) % 2 != 0:
-                raise ValueError
-            parsed = data.PreservedDict(zip(tokens[::2], tokens[1::2]))
+            parsed = json.loads(value)
+            if not isinstance(parsed, dict):
+                raise ValueError(f"Expected a JSON mapping, got '{value}'")
         except Exception:  # pylint: disable=broad-except
-            self.fail(
-                f"Expected a comma separated mapping (a=b,x=y), got {value}", param, ctx,
-            )
-
-        for k, v in parsed.items():
-            with suppress(Exception):
-                parsed[k] = literal_eval(v)
-        while True:
-            try:
-                key: str = next(k for k in parsed if "." in k)
-                parts = key.rsplit(".", maxsplit=1)
-                if (subkey := parts[0]) in parsed:
-                    parsed[subkey] |= {parts[1]: parsed.pop(key)}
-                else:
-                    parsed[subkey] = {parts[1]: parsed.pop(key)}
-            except StopIteration:
-                break
+            self.fail(f"Expected a valid JSON mapping, got '{value}'", param, ctx)
 
         return data.PreservedDict(parsed)
 
@@ -246,25 +215,15 @@ class TypedArray(click.ParamType):
     """
 
     name = "array"
-    items_type: ITEMS_TYPES | None = None
-    items_format: FORMATS | None = None
-    items_minimum: int | float | None = None
-    items_maximum: int | float | None = None
+    items: dict
 
-    def __init__(
-        self,
-        items_type: ITEMS_TYPES | None = None,
-        items_format: FORMATS | None = None,
-        items_min: int | float | None = None,
-        items_max: int | float | None = None,
-    ) -> None:
-        if items_type not in [*get_args(ITEMS_TYPES), None]:
+    def __init__(self, items: dict) -> None:
+        self.items = items or {}
+        if (items_type := self.items.get("type")) not in [
+            *get_args(SCHEMA_TYPES),
+            None,
+        ]:
             raise ValueError(f"Invalid type: {items_type}")
-
-        self.items_type = items_type or "string"
-        self.items_format = items_format
-        self.items_min = items_min
-        self.items_max = items_max
 
     def convert(  # type: ignore[override]
         self,
@@ -295,24 +254,43 @@ class TypedArray(click.ParamType):
             [1, 2, 3]
 
         """
-        try:
-            value_ = [*value] if isinstance(value, (list, tuple)) else [value]
-            type_ = click_type(
-                self.items_type,
-                format_=self.items_format,
-                min_=self.items_minimum,
-                max_=self.items_maximum,
-            )
-            if isinstance(type_, click.ParamType):
-                return [type_.convert(v, param, ctx) for v in value_ or ()]
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+            except Exception:  # pylint: disable=broad-except
+                self.fail(f"Expected a valid JSON array, got '{value}'", param, ctx)
             else:
-                return [type_(v) for v in value_ or ()]
+                value = parsed
+
+        if not isinstance(value, list):
+            self.fail(f"Expected a list, got '{value}'", param, ctx)
+
+        if not self.items.get("type"):
+            return value
+
+        items_click_type: Callable = click_type(
+            self.items.get("type", "string"),
+            enum=self.items.get("enum"),
+            items=self.items.get("items"),
+            pattern=self.items.get("pattern"),
+            format_=self.items.get("format"),
+            min_=self.items.get("minimum"),
+            max_=self.items.get("maximum"),
+        )
+        converter = (
+            partial(items_click_type.convert, param=param, ctx=ctx)
+            if isinstance(items_click_type, click.ParamType)
+            else items_click_type
+        )
+        try:
+            # NOTE: Mypy thinks that `converter` is not callable
+            return [converter(v) for v in value]  # type: ignore[operator]
         except Exception as exc:  # pylint: disable=broad-except
-            self.fail(str(exc), param, ctx)
+            self.fail(f"Unable to convert value: {exc}", param, ctx)
 
     def get_metavar(self, param: click.Parameter) -> str | None:
         del param  # Unused
-        return f"{self.name.upper()}[{self.items_type}]"
+        return f"{self.name.upper()}[{self.items.get('type', 'string')}]"
 
 
 class ParsedSize(InvertibleParamType):
@@ -435,10 +413,11 @@ class FormattedString(click.ParamType):
             if self.format_ is not None:
                 draft7_format_checker.check(_value, self.format_)
             if self.pattern is not None and not re.search(self.pattern, _value):
-                raise FormatError(f"'{value}' does not match pattern: '{self.pattern}'")
+                raise FormatError(f"'{value}' does not match pattern '{self.pattern}'")
         except FormatError as exc:
             self.fail(exc.message, param, ctx)
         except Exception as exc:  # pylint: disable=broad-except
+            # FIXME: Are any values not coercible to string?
             self.fail(f"Unable to convert '{value}' to string: {exc!r}", param, ctx)
         return _value
 
@@ -455,10 +434,7 @@ class FormattedString(click.ParamType):
 def click_type(  # type: ignore[return]
     type_: SCHEMA_TYPES | None = None,
     enum: list | None = None,
-    items_type: ITEMS_TYPES | None = None,
-    items_format: FORMATS | None = None,
-    items_min: int | float | None = None,
-    items_max: int | float | None = None,
+    items: dict | None = None,
     format_: FORMATS | None = None,
     pattern: str | None = None,
     min_: int | float | None = None,
@@ -499,15 +475,10 @@ def click_type(  # type: ignore[return]
         case "mapping":
             return StringMapping()
         case "array":
-            return TypedArray(
-                items_type,
-                items_format,
-                items_min,
-                items_max,
-            )
+            return TypedArray(items=items)
         case "path":
             return click.Path(path_type=Path)
         case "size":
             return ParsedSize()
         case _:
-            return FormattedString()
+            return FormattedString(format_, pattern)

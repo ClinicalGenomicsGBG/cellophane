@@ -61,6 +61,7 @@ class SubprocessExecutor(Executor, name="subprocess"):
             proc.terminate()
             code = int(proc.wait())
             logger.debug(f"Process (pid={proc.pid}) exited with code {code}")
+            # Master skywalker, there are too many of them, what are we going to do?
             for child in children:
                 logger.warning(f"Terminating orphan process (pid={child.pid})")
                 child.terminate()

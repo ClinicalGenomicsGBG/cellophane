@@ -194,6 +194,8 @@ class Sample:  # type: ignore[no-untyped-def]
     @merge.register("files")
     @staticmethod
     def _merge_files(this: list[Path], that: list[Path]) -> list[Path]:
+        # This is a hack to remove duplicates while preserving order
+        # the keys of dict.fromkeys() is essentially an ordered set
         return [*dict.fromkeys((*this, *that))]
 
     @merge.register("meta")

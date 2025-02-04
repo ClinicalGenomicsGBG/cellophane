@@ -140,8 +140,8 @@ def properties_(
             if (default := subschema.get("default")) is not None:
                 try:
                     flags[key].default = flags[key].convert(default)
-                except Exception:  # pylint: disable=broad-except
-                    flags[key].default = default
+                except Exception as exc:  # pylint: disable=broad-except
+                    raise ValidationError(f"Invalid default value '{default}' for '{prop}'") from exc
 
 
 def required_(

@@ -198,8 +198,8 @@ class Sample:  # type: ignore[no-untyped-def]
 
     @merge.register("meta")
     @staticmethod
-    def _merge_meta(this: set[str], that: set[str]) -> Container:
-        return Container(util.merge_mappings(this, that))
+    def _merge_meta(this: Container, that: Container) -> Container:
+        return this | that
 
     @merge.register("_fail")
     @staticmethod

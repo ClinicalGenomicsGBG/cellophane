@@ -14,6 +14,7 @@ from .exceptions import (
     InvalidProjectRepoError,
     InvalidVersionError,
     NoModulesError,
+    NoVersionsError,
 )
 from .repo import ProjectRepo
 from .util import (
@@ -116,7 +117,7 @@ def module(
             ctx.obj["modules_repo_url"],
             ctx.obj["modules_repo_branch"],
         )
-    except InvalidProjectRepoError as exception:
+    except (InvalidProjectRepoError, InvalidModulesRepoError) as exception:
         _logger.critical(exception, exc_info=True)
         raise SystemExit(1) from exception  # pylint: disable=bad-exception-cause
 
@@ -145,7 +146,7 @@ def module(
     except NoModulesError as exc:
         _logger.warning(exc)
         raise SystemExit(1) from exc
-    except (InvalidModuleError, InvalidVersionError) as exc:
+    except (InvalidModuleError, InvalidVersionError, NoVersionsError) as exc:
         _logger.critical(exc)
         raise SystemExit(1) from exc
     except InvalidModulesRepoError as exc:

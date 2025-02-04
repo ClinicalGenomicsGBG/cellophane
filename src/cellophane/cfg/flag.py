@@ -207,7 +207,7 @@ class Flag:
             help=self.description,
             show_default=(
                 False
-                if self.secret
+                if self.secret or (self.value or self.default) is None
                 else (
                     self.click_type.invert(default)
                     if (default := self.value or self.default)

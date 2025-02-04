@@ -1,4 +1,0 @@
-properties:
-  d:
-    type: string
-    default: MERGE_D

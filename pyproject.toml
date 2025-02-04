@@ -47,26 +47,24 @@ ignore_errors = true
 
 [tool.coverage.run]
 omit = [
-    "cellophane/src/testing/*",
-    "cellophane/__main__.py"
+    "src/cellophane/testing/*",
+    "src/cellophane/new_testing/*",
+    "src/cellophane/__main__.py",
+    "src/cellophane/__init__.py",
+    "src/cellophane/src.py",
+    "tests/*"
 ]
 concurrency = [
     "multiprocessing",
     "thread"
 ]
-branch = true
+branch = false
 
 [tool.coverage.report]
 omit = ["**/pytest-*/*"]
 
-
-[tool.pytest.ini_options]
-addopts = """
-    --cov src/cellophane
-    --cov-report term-missing
-    --dist loadfile -n 2
-    """
-
+[tool.ruff]
+line-length = 88
 
 [tool.pylint.'MESSAGES CONTROL']
 max-line-length = 88
@@ -92,6 +90,7 @@ dev-dependencies = [
     "types-humanfriendly>=10.0.1.10,<11.0.0.0",
     "types-psutil>=5.9.5.16,<6.0.0.0",
     "pylint>=3.0.2,<4.0.0",
+    "pytest-subprocess>=1.5.3",
 ]
 
 [tool.hatch]

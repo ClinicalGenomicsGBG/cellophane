@@ -1,0 +1,12 @@
+schema:
+  foo: bar
+  properties:
+    a: {type: array, items: {type: path}}
+    b: {type: array, items: {type: array, items: {type: path}}}
+
+
+expected:
+  - config: {}
+    flags:
+    - {key: [a], type: array, items: {type: path}}
+    - {key: [b], type: array, items: {type: array, items: {type: path}}}

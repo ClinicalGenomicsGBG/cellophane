@@ -1,0 +1,9 @@
+schema:
+  required: [a]
+  properties:
+    a: {type: string, default: SCHEMA}
+
+expected:
+  - config: {}
+    flags:
+    - {key: [a], type: string, default: SCHEMA, required: false}

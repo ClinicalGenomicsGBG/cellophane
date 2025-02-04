@@ -1,159 +1,97 @@
-# pragma: no cover
-
-"""Testing utilities for Cellophane."""
-
-import logging
-import sys
-import traceback
-from contextlib import suppress
+import re
 from pathlib import Path
-from typing import Any, Callable
-from uuid import uuid4
-
-from click.testing import CliRunner, Result
-from coverage import Coverage
-from pytest import LogCaptureFixture, fail, mark, param
-from pytest_mock import MockerFixture
-from ruamel.yaml import YAML
-
-import cellophane
-
-_YAML = YAML(typ="unsafe", pure=True)
+from typing import Any, Iterable, Mapping, Optional, Union
 
 
-def create_structure(
-    root: Path,
-    structure: dict,
-    external_root: Path,
-    external: dict[str, str] | None = None,
-) -> None:
-    """Create a directory structure from definition YAML."""
-    (root / "modules").mkdir(parents=True, exist_ok=True)
-    (root / "schema.yaml").touch(exist_ok=True)
-    for path, content in structure.items():
-        if isinstance(content, dict):
-            (root / path).mkdir(parents=True, exist_ok=True)
-            create_structure(root / path, content, external_root)
+class PathDict(dict):
+    def __init__(self, arg: Optional[Union[Mapping, Iterable]] = None, **kwargs: Any):
+        if isinstance(arg, Mapping):
+            return self.__class__.__init__(self, **arg, **kwargs)
+        elif isinstance(arg, Iterable):
+            return self.__class__.__init__(self, **dict(arg), **kwargs)
+
+        super().__init__()
+        self.update(kwargs)
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        _value = PathDict(value) if isinstance(value, Mapping) else value
+        _key = key.strip("/")
+        if "/" in _key:
+            parent, child = _key.rsplit("/", 1)
+            self[parent] = {child: _value}
+        elif _key in self and isinstance(self[_key], Mapping):
+            self[_key].update(_value)
         else:
-            (root / path).write_text(content)
-            (root / path).chmod(0o755)
+            super().__setitem__(_key, _value)
 
-    for src, dst in (external or {}).items():
-        _src = Path(src)
-        if not _src.is_absolute():
-            _src = (external_root / src).resolve()
-        (root / dst).symlink_to(_src)
+    def __getitem__(self, key: str) -> Any:
+        _key = key.strip("/")
+        if "/" in _key:
+            parent, child = _key.rsplit("/", 1)
+            return self[parent][child]
+        return super().__getitem__(_key)
 
-
-def fail_from_click_result(result: Result | None, reason: str) -> None:
-    """Fail a test with a message and a click result."""
-    if result:
-        fail(
-            pytrace=False,
-            reason=(
-                f"{reason}\n"
-                f"Exit code: {result.exit_code}\n"
-                f"Output:\n{result.output}"
-            ),
-        )
-    else:
-        fail(pytrace=False, reason=reason)
+    def update(self, other: dict | Iterable[tuple[Any, Any]], /, **kwargs: Any) -> None:  # type: ignore[override]
+        for key, value in (dict(other) | kwargs).items():
+            self[key] = value
 
 
-def execute_from_structure(
-    root: Path,
-    mocks: dict[str, dict[str, Any] | None],
-    args: dict[str, str] | None,
-    caplog: LogCaptureFixture,
-    mocker: MockerFixture,
-    runner: CliRunner,
-    exception: Exception | None,
-    logs: list[str] | None,
-    output: list[str] | None,
-    pwd: Path,
-) -> Result | None:
-    """Execute a cellophane wrapper from a directory structure."""
-    # Extract --flag value pairs from args. If a value is None, the flag is
-    # considered to be a flag without a value.
-    _args = [p for f in (args or {}).items() for p in f if p is not None]
-    _handlers = [
-        handler
-        for handler in logging.getLogger().handlers.copy()
-        if handler.__class__ != logging.StreamHandler
-    ]
-    logging.getLogger().handlers = _handlers
+class regex:
+    patterns: list[re.Pattern]
 
-    try:
-        mocker.patch("cellophane.cellophane.setup_console_handler")
-        _main = cellophane.cellophane("DUMMY", root=root)
-        for target, mock in (mocks or {}).items():
-            mocker.patch(target=target, **(mock or {}))
-        _result = runner.invoke(
-            cli=_main,
-            args=_args,
-            env={"TERM": "dumb"},
-            standalone_mode=False,
-        )
-        _exception = _result.exception
-    except (SystemExit, Exception) as exc:  # pylint: disable=broad-except
-        _exception = exc
-        _result = None
+    def __init__(
+        self,
+        *patterns: str | tuple[str, int] | re.Pattern,
+        flags: int = 0,
+    ):
+        self.patterns = []
+        for pattern in patterns:
+            match pattern:
+                case str(p):
+                    self.patterns.append(re.compile(p, flags))
+                case (str(p), int(f_)):
+                    self.patterns.append(re.compile(p, flags | f_))
+                case (str(p),):
+                    self.patterns.append(re.compile(p, flags))
+                case re.Pattern:
+                    self.patterns.append(pattern)
+                case _:
+                    raise ValueError(f"Invalid pattern {pattern}")
 
-    with suppress(ValueError):
-        sys.path.remove(str(root))
-    for module in sys.modules.copy():
-        if module.startswith("modules.") or module == "modules":
-            del sys.modules[module]
+    def __contains__(self, other: Union[str, bytes]) -> bool:
+        return self == other
 
-    cov = Coverage(data_file=pwd / f".coverage.{uuid4()}")
-    cov.combine(data_paths=[str(d) for d in root.glob(".coverage.*")])
+    def __eq__(self, other: Union[str, Path, Iterable]) -> bool:  # type: ignore[override]
+        if isinstance(other, Path):
+            if not other.is_file():
+                raise ValueError("Path must be a file")
+            return other.read_text() == self
+        elif isinstance(other, Iterable) and not isinstance(other, str):
+            return self == "\n".join(other)
+        elif not isinstance(other, str):
+            return self == repr(other)
 
-    if repr(_exception) != (exception or repr(None)):
-        fail_from_click_result(
-            result=_result,
-            reason=(
-                "Unexpected exception\n"
-                f"Expected: {exception}\n"
-                f"Received: {_exception!r}\n"
-                f"Traceback: {''.join(traceback.format_exception(_exception))}"
-            ),
-        )
+        return all(pattern.search(other) is not None for pattern in self.patterns)
 
-    for log_line in logs or []:
-        if log_line not in (captured := "\n".join(caplog.messages)):
-            fail_from_click_result(
-                result=_result,
-                reason=(
-                    f"Log message not found\n"
-                    f"Missing line:\n{log_line}\n\n"
-                    f"Captured:\n{captured}\n"
-                ),
-            )
-
-    for output_line in output or []:
-        if _result and output_line not in _result.output:
-            fail_from_click_result(
-                result=_result,
-                reason=f"Command output not found\nMissing output:\n{output_line}",
-            )
-
-    return _result
+    def __ne__(self, other: Union[str, Path]) -> bool:  # type: ignore[override]
+        if isinstance(other, Path):
+            if not other.is_file():
+                raise ValueError("Path must be a file")
+            return other.read_text() != self
+        return any(pattern.search(other) is None for pattern in self.patterns)
 
 
-def parametrize_from_yaml(paths: list[Path]) -> Callable:
-    """Parametrize a test from a YAML file."""
-
-    def wrapper(func: Callable) -> Callable:
-        return mark.parametrize(
-            "definition",
-            [
-                param(definition, id=definition.get("id", path.stem))
-                for path, documents in [(p, _YAML.load_all(p)) for p in paths]
-                for definitions in documents
-                for definition in (
-                    definitions if isinstance(definitions, list) else [definitions]
-                )
-            ],
-        )(func)
-
-    return wrapper
+class literal(regex):
+    def __init__(self, *patterns: str | tuple[str, int], flags: int = 0):
+        escaped_patterns: list[str | tuple[str, int]] = []
+        for pattern in patterns:
+            match pattern:
+                case str(p):
+                    escaped_patterns.append(re.escape(p))
+                case (str(p), int(f_)):
+                    escaped_patterns.append((re.escape(p), f_))
+                case (str(p),):
+                    escaped_patterns.append(re.escape(p))
+                case _:
+                    raise ValueError(f"Invalid pattern {pattern}")
+        super().__init__(*escaped_patterns, flags=flags)

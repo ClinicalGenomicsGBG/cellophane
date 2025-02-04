@@ -7,8 +7,7 @@ from frozendict import frozendict
 
 
 class frozenlist(tuple):
-    """A frozen list. Actually a tuple, but with a different name.
-    """
+    """A frozen list. Actually a tuple, but with a different name."""
 
 
 @singledispatch

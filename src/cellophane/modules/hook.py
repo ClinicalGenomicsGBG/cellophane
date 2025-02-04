@@ -13,6 +13,15 @@ from cellophane.data import Samples
 from cellophane.executors import Executor
 
 
+class _AFTER_ALL: ...
+
+
+class _BEFORE_ALL: ...
+
+
+DEPENDENCY_TYPE = str | list[type[_BEFORE_ALL] | type[_AFTER_ALL] | str] | None
+
+
 class Hook:
     """Base class for cellophane pre/post-hooks."""
 
@@ -21,8 +30,8 @@ class Hook:
     func: Callable
     when: Literal["pre", "post"]
     condition: Literal["always", "complete", "failed"]
-    before: list[str]
-    after: list[str]
+    before: DEPENDENCY_TYPE
+    after: DEPENDENCY_TYPE
 
     def __init__(
         self,
@@ -30,8 +39,8 @@ class Hook:
         when: Literal["pre", "post"],
         label: str | None = None,
         condition: Literal["always", "complete", "failed"] = "always",
-        before: str | list[str] | None = None,
-        after: str | list[str] | None = None,
+        before: DEPENDENCY_TYPE = None,
+        after: DEPENDENCY_TYPE = None,
     ) -> None:
         if isinstance(before, str) and before != "all":
             before = [before]
@@ -45,22 +54,22 @@ class Hook:
 
         match before, after:
             case "all", list(after):
-                self.before = ["before_all"]
+                self.before = [_BEFORE_ALL]
                 self.after = after
             case list(before), "all":
                 self.before = before
-                self.after = ["after_all"]
+                self.after = [_AFTER_ALL]
             case list(before), list(after) if "all" in before and "all" not in after:
-                self.before = ["before_all", *before]
+                self.before = [_BEFORE_ALL, *before]
                 self.before.remove("all")
                 self.after = after
             case list(before), list(after) if "all" not in before and "all" in after:
                 self.before = before
-                self.after = [*after, "after_all"]
+                self.after = [*after, _AFTER_ALL]
                 self.after.remove("all")
             case list(before), list(after) if "all" not in before and "all" not in after:
-                self.before = [*before, "after_all"]
-                self.after = [*after, "before_all"]
+                self.before = [*before, _AFTER_ALL]
+                self.after = [*after, _BEFORE_ALL]
             case _:
                 raise ValueError(f"{func.__name__}: {before=}, {after=}")
         self.__name__ = func.__name__

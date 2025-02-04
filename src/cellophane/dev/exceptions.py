@@ -33,7 +33,10 @@ class InvalidVersionError(Exception):
     """
 
     def __init__(
-        self, _module: str, branch: str | None, msg: str | None = None,
+        self,
+        _module: str,
+        branch: str | None,
+        msg: str | None = None,
     ) -> None:
         self.module = _module
         self.branch = branch
@@ -41,16 +44,14 @@ class InvalidVersionError(Exception):
 
 
 class NoModulesError(Exception):
-    """Exception raised when there are no modules to select from.
-    """
+    """Exception raised when there are no modules to select from."""
 
     def __init__(self, msg: str | None = None) -> None:
         super().__init__(msg)
 
 
 class NoVersionsError(Exception):
-    """Exception raised when there are no versions to select from.
-    """
+    """Exception raised when there are no versions to select from."""
 
     def __init__(self, msg: str | None = None) -> None:
         super().__init__(msg)

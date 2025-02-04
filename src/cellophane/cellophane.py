@@ -109,9 +109,7 @@ def cellophane(label: str, root: Path) -> click.Command:
             logger.debug(f"Found {len(sample_mixins)} sample mixins")
             logger.debug(f"Found {len(samples_mixins)} samples mixins")
             logger.debug(f"Found {len(executors_)} executors")
-            executor_cls = next(
-                e for e in executors_ if e.name == config.executor.name
-            )  # pragma: no cover
+            executor_cls = next(e for e in executors_ if e.name == config.executor.name)
             # StopIteration is never raised as config.executor.name has already been validated
             executors.EXECUTOR = executor_cls
             logger.debug(f"Using {executor_cls.name} executor")
@@ -192,17 +190,20 @@ def _main(
             sample.fail("Missing files")
 
     # Start runners for unprocessed samples and mergeback failed samples after
-    samples = start_runners(
-        runners=runners,
-        samples=samples.unprocessed,
-        logger=logger,
-        log_queue=log_queue,
-        config=config,
-        root=root,
-        executor_cls=executor_cls,
-        timestamp=timestamp,
-        cleaner=cleaner,
-    ) | samples.failed
+    samples = (
+        start_runners(
+            runners=runners,
+            samples=samples.unprocessed,
+            logger=logger,
+            log_queue=log_queue,
+            config=config,
+            root=root,
+            executor_cls=executor_cls,
+            timestamp=timestamp,
+            cleaner=cleaner,
+        )
+        | samples.failed
+    )
 
     # Run post-hooks
     samples = run_hooks(
@@ -227,8 +228,7 @@ def _main(
         o for o in samples.output if isinstance(o, OutputGlob) or not o.dst.exists()
     ]:
         logger.warning(
-            "One or more outputs were not copied "
-            "(This should be done by a post-hook)",
+            "One or more outputs were not copied (This should be done by a post-hook)"
         )
         for output_ in missing_outputs:
             logger.debug(f"Missing output: {output_}")

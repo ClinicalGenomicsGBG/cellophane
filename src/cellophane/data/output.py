@@ -14,8 +14,7 @@ from .container import Container
 
 @define
 class Output:
-    """Output file to be copied to the another directory.
-    """
+    """Output file to be copied to the another directory."""
 
     src: Path = field(
         kw_only=True,
@@ -47,8 +46,7 @@ class Output:
 
 @define
 class OutputGlob:  # type: ignore[no-untyped-def]
-    """Output glob find files to be copied to the another directory.
-    """
+    """Output glob find files to be copied to the another directory."""
 
     src: str = field(
         converter=str,
@@ -139,13 +137,11 @@ class OutputGlob:  # type: ignore[no-untyped-def]
                     else:
                         dst_dir = config.resultdir / _dst_dir
 
-
                 if self.dst_name is None:
                     dst_name = m.name
                 elif len(matches) > 1:
                     warn(
-                        f"Destination name {self.dst_name} will be ignored "
-                        f"as '{self.src}' matches multiple files",
+                        f"Destination name {self.dst_name} will be ignored as '{self.src}' matches multiple files"
                     )
                     dst_name = m.name
                 else:

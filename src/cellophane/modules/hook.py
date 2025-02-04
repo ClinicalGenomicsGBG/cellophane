@@ -1,12 +1,11 @@
 import time
 from copy import deepcopy
 from functools import partial
+from graphlib import TopologicalSorter
 from logging import LoggerAdapter, getLogger
 from multiprocessing import Queue
 from pathlib import Path
 from typing import Callable, Literal, Sequence
-
-from graphlib import TopologicalSorter
 
 from cellophane.cfg import Config
 from cellophane.cleanup import Cleaner

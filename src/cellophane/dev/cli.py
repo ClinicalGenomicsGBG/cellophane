@@ -74,9 +74,7 @@ def main(
     ctx.ensure_object(dict)
     logs.setup_console_handler().setLevel(log_level)
 
-    ctx.obj["logger"] = logging.LoggerAdapter(
-        logging.getLogger(), {"label": "cellophane"},
-    )
+    ctx.obj["logger"] = logging.LoggerAdapter(logging.getLogger(), {"label": "cellophane"})
     ctx.obj["logger"].setLevel(log_level)
     ctx.obj["path"] = path
     ctx.obj["modules_repo_url"] = modules_repo_url
@@ -219,9 +217,7 @@ def update(
             remove_requirements(path, module_)
             add_requirements(path, module_)
         except Exception as exc:  # pylint: disable=broad-except
-            logger.error(
-                f"Unable to update '{module_}->{version}': {exc!r}", exc_info=True,
-            )
+            logger.error(f"Unable to update '{module_}->{version}': {exc!r}", exc_info=True)
             repo.head.reset("HEAD", index=True, working_tree=True)
             continue
         else:
@@ -293,5 +289,5 @@ def init(ctx: click.Context, name: str, force: bool) -> None:
         logger.critical("Project path is not empty (--force to ignore)")
         raise SystemExit(1) from exc
     except Exception as exc:
-        logger.critical(f"Unhandeled exception: {exc!r}", exc_info=True)
+        logger.critical(f"Unhandled exception: {exc!r}", exc_info=True)
         raise SystemExit(1) from exc

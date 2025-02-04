@@ -35,8 +35,7 @@ def add_requirements(path: Path, _module: str) -> None:
     if (
         module_path.is_dir()
         and (module_path / "requirements.txt").exists()
-        and (spec := f"-r {_module}/requirements.txt\n")
-        not in requirements_path.read_text()
+        and (spec := f"-r {_module}/requirements.txt\n") not in requirements_path.read_text()
     ):
         with open(requirements_path, "a", encoding="utf-8") as handle:
             handle.write(spec)
@@ -53,9 +52,7 @@ def remove_requirements(path: Path, _module: str) -> None:
     """
     requirements_path = path / "modules" / "requirements.txt"
 
-    if (spec := f"-r {_module}/requirements.txt\n") in (
-        requirements := requirements_path.read_text()
-    ):
+    if (spec := f"-r {_module}/requirements.txt\n") in (requirements := requirements_path.read_text()):
         with open(requirements_path, "w", encoding="utf-8") as handle:
             handle.write(requirements.replace(spec, ""))
 
@@ -114,14 +111,11 @@ def ask_version(module_: str, valid: Iterable[tuple[str, str]]) -> tuple[str, st
 
     """
     if not valid:
-        raise NoVersionsError("No compatible versions to select from")
+        raise NoVersionsError(f"No compatible versions for module '{module_}'")
 
     _versions = select(
         f"Select version for {module_}",
-        choices=[
-            Choice(title=version, value=(module_, tag, version))
-            for version, tag in valid
-        ],
+        choices=[Choice(title=version, value=(module_, tag, version)) for version, tag in valid],
         erase_when_done=True,
     ).ask()
     Console().show_cursor()
@@ -149,17 +143,11 @@ def with_modules(ignore_branch: bool = False) -> Callable:
             if invalid_versions := {
                 (m, v)
                 for m, v in modules or []
-                if v is not None
-                and v != "latest"
-                and v not in repo.external.modules[m]["versions"]
+                if v is not None and v != "latest" and v not in repo.external.modules[m]["versions"]
             }:
                 raise InvalidVersionError(*invalid_versions.pop())
 
-            modules_: (
-                list[tuple[str, None, str | None]]
-                | list[tuple[str, None, None]]
-                | list[tuple[str, str, str]]
-            )
+            modules_: list[tuple[str, None, str | None]] | list[tuple[str, None, None]] | list[tuple[str, str, str]]
             if modules:
                 modules_ = [(m, None, v) for m, v in modules]
             else:

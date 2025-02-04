@@ -246,7 +246,7 @@ def start_runners(
             ):
                 workdir = config.workdir / config.tag / runner_.label
                 if runner_.split_by is not None:
-                    workdir /= group or "unknown"
+                    workdir /= str(group or "unknown")
 
                 result = pool.apply_async(
                     runner_,

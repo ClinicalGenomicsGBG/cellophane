@@ -23,6 +23,7 @@ class SubprocessExecutor(Executor, name="subprocess"):
     def target(
         self,
         *args: str,
+        name: str,
         uuid: UUID,
         workdir: Path,
         env: dict,
@@ -36,8 +37,8 @@ class SubprocessExecutor(Executor, name="subprocess"):
         logdir.mkdir(parents=True, exist_ok=True)
 
         with (
-            open(logdir / f"{uuid.hex}.out", "w", encoding="utf-8") as stdout,
-            open(logdir / f"{uuid.hex}.err", "w", encoding="utf-8") as stderr,
+            open(workdir / f"{name}_{uuid.hex}.subprocess.out", "w", encoding="utf-8") as stdout,
+            open(workdir / f"{name}_{uuid.hex}.subprocess.err", "w", encoding="utf-8") as stderr,
         ):
             proc = sp.Popen(  # nosec
                 shlex.split(shlex.join(args)),

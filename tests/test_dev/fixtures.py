@@ -43,19 +43,21 @@ def modules_repo_path(tmp_path_factory: TempPathFactory) -> Iterator[Path]:
     modules_json["c"]["versions"].pop("1.0.0")
     modules_json["c"]["versions"].pop("2.0.0")
     modules_json["c"]["versions"]["dev"]["cellophane"] = ["9001.0.0"]
+    modules_json["d"]["path"] = "modules/SOME_OTHER_PATH/"
     with open(path / "modules.json", "w") as file:
         json.dump(modules_json, file)
     repo.index.add("**")
     repo.index.commit("Initial commit")
     for module in ("a", "b", "c", "d"):
-        (path / "modules" / module).mkdir(parents=True)
-        (path / "modules" / module / module.upper()).write_text("1.0.0")
-        (path / "modules" / module / "requirements.txt").write_text("foo==1.0.0")
-        repo.index.add(f"modules/{module}")
+        dir_name = module if module != "d" else "SOME_OTHER_PATH"
+        (path / "modules" / dir_name).mkdir(parents=True)
+        (path / "modules" / dir_name / module.upper()).write_text("1.0.0")
+        (path / "modules" / dir_name / "requirements.txt").write_text("foo==1.0.0")
+        repo.index.add(f"modules/{dir_name}")
         repo.index.commit(f"Add module {module}/1.0.0")
         repo.create_tag(f"{module}/1.0.0")
-        (path / "modules" / module / module.upper()).write_text("2.0.0")
-        repo.index.add(f"modules/{module}")
+        (path / "modules" / dir_name / module.upper()).write_text("2.0.0")
+        repo.index.add(f"modules/{dir_name}")
         repo.index.commit(f"Update module {module}/2.0.0")
         repo.create_tag(f"{module}/2.0.0")
     repo.create_head("dev")

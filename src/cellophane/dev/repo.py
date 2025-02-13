@@ -207,7 +207,7 @@ class ProjectRepo(Repo):
             List[str]: The list of module names.
 
         """
-        return {name for name, item in self.external.modules.items() if (Path("modules") / name).exists()}
+        return {name for name, item in self.external.modules.items() if (Path("modules") / Path(item["path"]).name).exists()}
 
     @property
     def absent_modules(self) -> set[str]:

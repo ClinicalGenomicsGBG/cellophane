@@ -167,17 +167,18 @@ def module_action(
         }
         try:
             previous_actions = drop_local_commits(repo, index, module, logger)
-            index.remove(path / f"modules/{module}", working_tree=True, r=True, ignore_unmatch=True)
-            remove_requirements(path, module)
+            module_path = Path(repo.external.modules[module]["path"])
+            index.remove(path / f"modules/{module_path.name}", working_tree=True, r=True, ignore_unmatch=True)
+
+            remove_requirements(path, module_path)
             if action in ["add", "update"]:
                 # Append the module name to the tag if it is not a valid tag
                 _tag = tag if tag in [r.name for r in repo.tags] else f"modules/{tag}"
-                _path = repo.external.modules[module]["path"]
                 # Read the tree from the modules repository and add it to the 'modules' directory
-                repo.git.read_tree(f"--prefix=modules/{module}/", "-u", f"{_tag}:{_path}")
-            module_path = Path(repo.external.modules[module]["path"])
+                repo.git.read_tree(f"--prefix=modules/{module_path.name}/", "-u", f"{_tag}:{module_path}")
+
             new_action = rewrite_action(index, module_path, previous_actions, action)
-            add_requirements(path, module)
+            add_requirements(path, module_path)
             update_example_config(path)
 
         except Exception as exc:

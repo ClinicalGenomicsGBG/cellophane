@@ -22,7 +22,7 @@ from .exceptions import (
 from .repo import ProjectRepo
 
 
-def add_requirements(path: Path, _module: str) -> None:
+def add_requirements(path: Path, module_path: Path) -> None:
     """Add module requirements to the global requirements file.
 
     Args:
@@ -32,18 +32,18 @@ def add_requirements(path: Path, _module: str) -> None:
 
     """
     requirements_path = path / "modules" / "requirements.txt"
-    module_path = path / "modules" / _module
+    module_path = path / "modules" / module_path.name
 
     if (
         module_path.is_dir()
         and (module_path / "requirements.txt").exists()
-        and (spec := f"-r {_module}/requirements.txt\n") not in requirements_path.read_text()
+        and (spec := f"-r {module_path.name}/requirements.txt\n") not in requirements_path.read_text()
     ):
         with open(requirements_path, "a", encoding="utf-8") as handle:
             handle.write(spec)
 
 
-def remove_requirements(path: Path, _module: str) -> None:
+def remove_requirements(path: Path, module_path: Path) -> None:
     """Remove a specific module's requirements from the project's requirements.txt file.
 
     Args:
@@ -54,7 +54,7 @@ def remove_requirements(path: Path, _module: str) -> None:
     """
     requirements_path = path / "modules" / "requirements.txt"
 
-    if (spec := f"-r {_module}/requirements.txt\n") in (requirements := requirements_path.read_text()):
+    if (spec := f"-r {module_path.name}/requirements.txt\n") in (requirements := requirements_path.read_text()):
         with open(requirements_path, "w", encoding="utf-8") as handle:
             handle.write(requirements.replace(spec, ""))
 

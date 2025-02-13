@@ -39,6 +39,7 @@ class Executor:
 
     name: ClassVar[str]
     config: cfg.Config
+    workdir_base: Path
     uuid: UUID = field(init=False)
 
     def __init_subclass__(
@@ -123,7 +124,7 @@ class Executor:
         logs.handle_warnings()
         logger = logging.LoggerAdapter(logging.getLogger(), {"label": name})
 
-        workdir_ = workdir or config.workdir / uuid.hex
+        workdir_ = workdir or self.workdir_base / f"{name}.{uuid.hex}.{self.name}"
         workdir_.mkdir(parents=True, exist_ok=True)
 
         env_ = env or {}

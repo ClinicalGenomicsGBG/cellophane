@@ -93,10 +93,11 @@ class Hook:
     ) -> Samples:
         logger = LoggerAdapter(getLogger(), {"label": self.label})
         logger.debug(f"Running {self.label} hook")
-
+        _workdir = config.workdir / config.tag
         with executor_cls(
             config=config,
             log_queue=log_queue,
+            workdir_base=_workdir,
         ) as executor:
             match self.func(
                 samples=samples,
@@ -104,7 +105,7 @@ class Hook:
                 timestamp=timestamp,
                 logger=logger,
                 root=root,
-                workdir=config.workdir / config.tag,
+                workdir=_workdir,
                 executor=executor,
                 cleaner=cleaner,
             ):

@@ -134,7 +134,7 @@ class Executor:
         stdout_path = workdir_ / f"{name}.{uuid.hex}.{self.name}.stdout"
         stderr_path = workdir_ / f"{name}.{uuid.hex}.{self.name}.stderr"
 
-        env_ = env or {}
+        env_ = config.executor.env | env or {}
         args_ = tuple(word for arg in args for word in shlex.split(str(arg)))
         if conda_spec:
             yaml = YAML(typ="safe")

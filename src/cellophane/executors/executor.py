@@ -154,7 +154,7 @@ class Executor:
         stdout_path = _workdir / f"{name}.{uuid.hex}.{self.name}.stdout"
         stderr_path = _workdir / f"{name}.{uuid.hex}.{self.name}.stderr"
 
-        _env = env or {}
+        _env = config.executor.env | env or {}
         _args = tuple(word for arg in args for word in shlex.split(str(arg)))
         if conda_spec:
             env_path = build_environment(

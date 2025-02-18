@@ -53,7 +53,7 @@ class Test_executor_submit(BaseTest):
             "MockExecutor called with name='RUNNER'",
             "MockExecutor called with name='HOOK'",
             "cmdline=ping localhost -c 1",
-            "os_env=True",
+            "os_env=False",
             "cpus=1",
             "memory=2000000000",
         )

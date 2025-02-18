@@ -43,6 +43,10 @@ properties:
         type: size
         description: Ammount of memory to allocate to jobs started (if supported by the executor)
         default: 2 GB
+      os_env:
+        type: boolean
+        description: Inherit environment variables from the parent process (Can be overridden in calls to executor.submit)
+        default: false
       env:
         type: mapping
         description: Environment variables to set for all jobs submitted to the executor

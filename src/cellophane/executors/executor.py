@@ -150,6 +150,7 @@ class Executor:
             args_ = (str(micromamba_bootstrap), *args_)
 
         try:
+            logger.debug(f"Starting {self.name} job '{name}' (UUID={uuid.hex[:8]})")
             target_signature = signature(self.target).parameters
             kwargs = {
                 "name": name,
@@ -178,16 +179,16 @@ class Executor:
 
             self.target(*args_, **kwargs)  # type: ignore[arg-type]
         except InterruptWorker as exc:
-            logger.debug(f"Terminating job with uuid {uuid}")
+            logger.debug(f"Terminating {self.name} job '{name}' (UUID={uuid.hex[:8]})")
             code = self.terminate_hook(uuid, logger)
             raise SystemExit(code or 143) from exc
         except SystemExit as exc:
             if exc.code != 0:
-                logger.warning(f"Command failed with exit code: {exc.code}")
+                logger.warning(f"Non-zero exit code ({exc.code}) for {self.name} job '{name}' (UUID={uuid.hex[:8]})")
                 self.terminate_hook(uuid, logger)
                 raise exc
         except Exception as exc:  # pylint: disable=broad-except
-            logger.warning(f"Command failed with exception: {exc!r}")
+            logger.warning(f"Exception in {self.name} job '{name}' (UUID={uuid.hex[:8]}): {exc!r}", exc_info=exc)
             self.terminate_hook(uuid, logger)
             raise SystemExit(1) from exc
 
@@ -308,14 +309,14 @@ class Executor:
             callback=partial(
                 self._callback,
                 fn=callback,
-                msg=f"Job completed: {_uuid}",
+                msg=f"Completed {self.name} job '{_name}' (UUID={_uuid.hex[:8]})",
                 logger=logger,
                 lock=self.locks[_uuid],
             ),
             error_callback=partial(
                 self._callback,
                 fn=error_callback,
-                msg=f"Job failed: {_uuid}",
+                msg=f"Error in {self.name} job '{_name}' (UUID={_uuid.hex[:8]})",
                 logger=logger,
                 lock=self.locks[_uuid],
             ),

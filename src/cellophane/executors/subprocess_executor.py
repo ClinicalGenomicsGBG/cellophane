@@ -51,24 +51,24 @@ class SubprocessExecutor(Executor, name="subprocess"):
                 start_new_session=True,
             )
             self.pids[uuid] = proc.pid
-            logger.debug(f"Started process (pid={proc.pid})")
+            logger.debug(f"Started process (pid={proc.pid}) for job '{name}' (UUID={uuid.hex[:8]})")
             returncode = proc.wait()
-            logger.debug(f"Process (pid={proc.pid}) exited with code {returncode}")
             exit(returncode)
 
     def terminate_hook(self, uuid: UUID, logger: LoggerAdapter) -> int | None:
-        if uuid in self.pids:
-            proc = psutil.Process(self.pids[uuid])
-            children = proc.children(recursive=True)
-            logger.warning(f"Terminating process (pid={proc.pid})")
-            proc.terminate()
-            code = int(proc.wait())
-            logger.debug(f"Process (pid={proc.pid}) exited with code {code}")
-            # Master skywalker, there are too many of them, what are we going to do?
-            for child in children:
-                logger.warning(f"Terminating orphan process (pid={child.pid})")
-                child.terminate()
-            psutil.wait_procs(children)
-            return code
-        else:
+        if uuid not in self.pids:
             return None
+
+        proc = psutil.Process(self.pids[uuid])
+        children = proc.children(recursive=True)
+        if proc.is_running():
+            logger.warning(f"Terminating process (pid={self.pids[uuid]})")
+            proc.terminate()
+        code = int(proc.wait())
+        logger.debug(f"Process (pid={self.pids[uuid]}) exited with code {code}")
+        # Master skywalker, there are too many of them, what are we going to do?
+        for child in children:
+            logger.warning(f"Terminating orphan process (pid={child.pid})")
+            child.terminate()
+        psutil.wait_procs(children)
+        return code

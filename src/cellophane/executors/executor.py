@@ -7,11 +7,13 @@ import shlex
 import sys
 from contextlib import suppress
 from functools import partial
+from inspect import signature
 from multiprocessing.synchronize import Lock
 from pathlib import Path
 from time import sleep
 from typing import Any, Callable, ClassVar, TypeVar
 from uuid import UUID, uuid4
+from warnings import warn
 
 from attrs import define, field
 from mpire import WorkerPool
@@ -127,6 +129,9 @@ class Executor:
         workdir_ = workdir or self.workdir_base / f"{name}.{uuid.hex}.{self.name}"
         workdir_.mkdir(parents=True, exist_ok=True)
 
+        stdout_path = workdir_ / f"{name}.{uuid.hex}.{self.name}.stdout"
+        stderr_path = workdir_ / f"{name}.{uuid.hex}.{self.name}.stderr"
+
         env_ = env or {}
         args_ = tuple(word for arg in args for word in shlex.split(str(arg)))
         if conda_spec:
@@ -145,18 +150,33 @@ class Executor:
             args_ = (str(micromamba_bootstrap), *args_)
 
         try:
-            self.target(
-                *args_,
-                name=name,
-                uuid=uuid,
-                workdir=workdir_,
-                env={k: str(v) for k, v in env_.items()},
-                os_env=os_env,
-                cpus=cpus or config.executor.cpus,
-                memory=memory or config.executor.memory,
-                config=config,
-                logger=logger,
-            )
+            target_signature = signature(self.target).parameters
+            kwargs = {
+                "name": name,
+                "uuid": uuid,
+                "workdir": workdir_,
+                "env": {k: str(v) for k, v in env_.items()},
+                "os_env": os_env,
+                "cpus": cpus or config.executor.cpus,
+                "memory": memory or config.executor.memory,
+                "config": config,
+                "logger": logger,
+                "stderr": stderr_path,
+                "stdout": stdout_path,
+            }
+
+            if any(arg not in target_signature for arg in ["stdout", "stderr"]):
+                kwargs.pop("stderr")
+                kwargs.pop("stdout")
+                warn(
+                    f"The target method of executor '{self.name}' does not accept 'stdout' and 'stderr' arguments. "
+                    "These arguments define 'pathlib.Path' objects pointing where cellophane expects an executor to "
+                    "write the standard output and error streams of the job. In the next major release of cellophane, "
+                    "this will raise an exception.",
+                    category=PendingDeprecationWarning,
+                )
+
+            self.target(*args_, **kwargs)  # type: ignore[arg-type]
         except InterruptWorker as exc:
             logger.debug(f"Terminating job with uuid {uuid}")
             code = self.terminate_hook(uuid, logger)
@@ -183,6 +203,8 @@ class Executor:
         memory: int,
         config: cfg.Config,
         logger: logging.LoggerAdapter,
+        stderr: Path,
+        stdout: Path,
     ) -> int | None:  # pragma: no cover
         """Will be called by the executor to execute a command.
 
@@ -212,7 +234,7 @@ class Executor:
 
         """
         # Exluded from coverage as this is a stub method.
-        del name, uuid, workdir, env, os_env, cpus, memory, config, logger  # Unused
+        del name, uuid, workdir, env, os_env, cpus, memory, config, logger, stdout, stderr  # Unused
         raise NotImplementedError
 
     def submit(

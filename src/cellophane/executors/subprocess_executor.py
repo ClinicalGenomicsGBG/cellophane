@@ -29,6 +29,8 @@ class SubprocessExecutor(Executor, name="subprocess"):
         env: dict,
         os_env: bool = True,
         logger: LoggerAdapter,
+        stdout: Path,
+        stderr: Path,
         **kwargs: Any,
     ) -> None:
         """Execute a command."""
@@ -37,15 +39,15 @@ class SubprocessExecutor(Executor, name="subprocess"):
         logdir.mkdir(parents=True, exist_ok=True)
 
         with (
-            open(workdir / f"{name}_{uuid.hex}.subprocess.out", "w", encoding="utf-8") as stdout,
-            open(workdir / f"{name}_{uuid.hex}.subprocess.err", "w", encoding="utf-8") as stderr,
+            open(stdout, "w", encoding="utf-8") as out,
+            open(stderr, "w", encoding="utf-8") as err
         ):
             proc = sp.Popen(  # nosec
                 shlex.split(shlex.join(args)),
                 cwd=workdir,
                 env=env | ({**os.environ} if os_env else {}),
-                stdout=stdout,
-                stderr=stderr,
+                stdout=out,
+                stderr=err,
                 start_new_session=True,
             )
             self.pids[uuid] = proc.pid

@@ -17,7 +17,7 @@ attrs==23.2.0
 click==8.1.7
     # via cellophane
     # via rich-click
-colorama==0.4.6 ; sys_platform == 'win32' or platform_system == 'Windows'
+colorama==0.4.6 ; sys_platform == 'win32'
     # via click
     # via pytest
     # via tqdm
@@ -65,7 +65,7 @@ pytest==8.3.3
     # via pytest-profiling
 pytest-profiling==1.7.0
     # via cellophane
-pywin32==306 ; platform_system == 'Windows'
+pywin32==306 ; sys_platform == 'win32'
     # via mpire
 questionary==2.0.1
     # via cellophane

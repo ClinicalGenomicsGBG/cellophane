@@ -22,7 +22,7 @@ click==8.1.7
     # via black
     # via cellophane
     # via rich-click
-colorama==0.4.6 ; sys_platform == 'win32' or platform_system == 'Windows'
+colorama==0.4.6 ; sys_platform == 'win32'
     # via bandit
     # via click
     # via pylint
@@ -111,7 +111,7 @@ pytest-profiling==1.7.0
     # via cellophane
 pytest-repeat==0.9.3
 pytest-xdist==3.6.1
-pywin32==306 ; platform_system == 'Windows'
+pywin32==306 ; sys_platform == 'win32'
     # via mpire
 pyyaml==6.0.2
     # via bandit

@@ -1,7 +1,7 @@
 """Flag class for command-line options."""
 
 from functools import partial
-from typing import Any, Callable, SupportsFloat, Type, get_args
+from typing import Any, Callable, Iterable, SupportsFloat, Type, get_args
 
 import rich_click as click
 from attrs import define, field, setters
@@ -21,6 +21,10 @@ from .click_ import (
 
 def _convert_float(value: SupportsFloat | None) -> float | None:
     return float(value) if value is not None else None
+
+
+def _convert_tuple(value: Iterable) -> tuple[str, ...]:
+    return tuple(value)
 
 
 @define(slots=False)
@@ -50,7 +54,7 @@ class Flag:
 
     """
 
-    key: tuple[str, ...] = field(converter=tuple, on_setattr=setters.convert)
+    key: tuple[str, ...] = field(converter=_convert_tuple, on_setattr=setters.convert)
     type: SCHEMA_TYPES | None = field(default=None)
     items_type: ITEMS_TYPES | None = field(default=None)
     items_format: FORMATS | None = field(default=None)
@@ -207,7 +211,7 @@ class Flag:
             help=self.description,
             show_default=(
                 False
-                if self.secret
+                if self.secret or (self.value or self.default) is None
                 else (
                     self.click_type.invert(default)
                     if (default := self.value or self.default)

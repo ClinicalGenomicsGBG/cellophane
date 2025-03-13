@@ -463,7 +463,7 @@ class Test_Config:
             try:
                 result_parsed = _YAML.load(result.stdout)
             except Exception:  # pylint: disable=broad-except
-                fail(msg=result.stdout)
+                fail(reason=result.stdout)
             else:
                 assert result_parsed == _config, result.output
 

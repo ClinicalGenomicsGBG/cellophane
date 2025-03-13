@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 
 from cellophane import data, modules
 from cellophane.executors import SubprocessExecutor
-from cellophane.modules.hook import resolve_dependencies
+from cellophane.modules.hook import _AFTER_ALL, _BEFORE_ALL, resolve_dependencies
 from cellophane.modules.runner_ import _cleanup
 from graphlib import CycleError
 from psutil import Process, TimeoutExpired
@@ -95,30 +95,30 @@ class Test_Hook:
     @mark.parametrize(
         "kwargs,expected_before,expected_after",
         [
-            param({}, ["after_all"], ["before_all"], id="base"),
-            param({"before": "all"}, ["before_all"], [], id="before_all"),
-            param({"after": "all"}, [], ["after_all"], id="after_all"),
+            param({}, [_AFTER_ALL], [_BEFORE_ALL], id="base"),
+            param({"before": "all"}, [_BEFORE_ALL], [], id="before_all"),
+            param({"after": "all"}, [], [_AFTER_ALL], id="after_all"),
             param(
                 {"before": "all", "after": ["AFTER_A", "AFTER_B"]},
-                ["before_all"],
+                [_BEFORE_ALL],
                 ["AFTER_A", "AFTER_B"],
                 id="before_all_after_some",
             ),
             param(
                 {"after": "all", "before": ["BEFORE_A", "BEFORE_B"]},
                 ["BEFORE_A", "BEFORE_B"],
-                ["after_all"],
+                [_AFTER_ALL],
                 id="before_some_after_all",
             ),
             param(
                 {"after": ["all", "AFTER_A"], "before": ["BEFORE_A", "BEFORE_B"]},
                 ["BEFORE_A", "BEFORE_B"],
-                ["AFTER_A", "after_all"],
+                ["AFTER_A", _AFTER_ALL],
                 id="before_some_after_all_some",
             ),
             param(
                 {"after": ["AFTER_A", "AFTER_B"], "before": ["BEFORE_A", "all"]},
-                ["before_all", "BEFORE_A"],
+                [_BEFORE_ALL, "BEFORE_A"],
                 ["AFTER_A", "AFTER_B"],
                 id="before_some_all_after_some",
             ),

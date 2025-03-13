@@ -11,7 +11,6 @@ from attrs import define, field, fields_dict, make_class
 from attrs.setters import convert, frozen
 from ruamel.yaml import YAML
 
-from .. import util
 from .container import Container
 from .exceptions import MergeSamplesTypeError, MergeSamplesUUIDError
 from .merger import Merger
@@ -180,9 +179,7 @@ class Sample:  # type: ignore[no-untyped-def]
             raise MergeSamplesUUIDError
 
         _sample = deepcopy(self)
-        for _field in (
-            f for f in fields_dict(self.__class__) if f not in ["id", "uuid"]
-        ):
+        for _field in (f for f in fields_dict(self.__class__) if f not in ["id", "uuid"]):
             setattr(
                 _sample,
                 _field,
@@ -197,12 +194,14 @@ class Sample:  # type: ignore[no-untyped-def]
     @merge.register("files")
     @staticmethod
     def _merge_files(this: list[Path], that: list[Path]) -> list[Path]:
+        # This is a hack to remove duplicates while preserving order
+        # the keys of dict.fromkeys() is essentially an ordered set
         return [*dict.fromkeys((*this, *that))]
 
     @merge.register("meta")
     @staticmethod
-    def _merge_meta(this: set[str], that: set[str]) -> Container:
-        return Container(util.merge_mappings(this, that))
+    def _merge_meta(this: Container, that: Container) -> Container:
+        return this | that
 
     @merge.register("_fail")
     @staticmethod
@@ -215,14 +214,12 @@ class Sample:  # type: ignore[no-untyped-def]
         return this and that
 
     def fail(self, reason: str) -> None:
-        """Marks the sample as failed with the specified reason.
-        """
+        """Marks the sample as failed with the specified reason."""
         self._fail = reason
 
     @property
     def failed(self) -> str | Literal[False]:
-        """Checks if the sample is failed by any runner
-        """
+        """Checks if the sample is failed by any runner"""
         return self._fail or False
 
     @classmethod
@@ -272,9 +269,7 @@ class Samples(UserList[S]):
     data: list[S] = field(factory=list)
     sample_class: ClassVar[type[Sample]] = Sample
     merge: ClassVar[Merger] = Merger()
-    output: set[Output | OutputGlob] = field(
-        factory=set, converter=set, on_setattr=convert,
-    )
+    output: set[Output | OutputGlob] = field(factory=set, converter=set, on_setattr=convert)
     _mixins: ClassVar[tuple[type["Samples"], ...]] = ()
 
     def __init__(self, data: list | None = None, /, **kwargs: Any) -> None:
@@ -289,9 +284,9 @@ class Samples(UserList[S]):
             return next(s for s in self if s.uuid == key)
 
         if isinstance(key, UUID):
-            raise KeyError(f"Sample with UUID {key.hex} not found")
+            raise KeyError(f"Sample with UUID {key.hex!r} not found")
 
-        raise TypeError(f"Key {key} is not an int or a UUID")
+        raise TypeError(f"Key {key!r} is not an int or a UUID")
 
     def __setitem__(self, key: int | UUID, value: S) -> None:  # type: ignore[override]
         if isinstance(key, int):
@@ -301,7 +296,7 @@ class Samples(UserList[S]):
         elif isinstance(key, UUID):
             self.append(value)
         else:
-            raise TypeError(f"Key {key} is not an int or a UUID")
+            raise TypeError(f"Key {key!r} is not an int or a UUID")
 
     def __contains__(self, item: S | UUID) -> bool:  # type: ignore[override]
         if isinstance(item, UUID):
@@ -419,7 +414,7 @@ class Samples(UserList[S]):
         """
         return type(cls.__name__, (cls,), {"sample_class": sample_class})
 
-    def split(self, by: str | None = "uuid") -> Iterable[tuple[Any, "Samples[Sample]"]]:
+    def split(self, by: str | None = "uuid") -> Iterable[tuple[Any, "Samples[S]"]]:
         """Splits the data into groups based on the specified attribute value.
 
         Args:
@@ -473,8 +468,7 @@ class Samples(UserList[S]):
             yield None, self
         else:
             yield from {
-                sample[by]: self.__class__([li for li in self if li[by] == sample[by]])
-                for sample in self
+                sample[by]: self.__class__([li for li in self if li[by] == sample[by]]) for sample in self
             }.items()
 
     @property
@@ -511,11 +505,7 @@ class Samples(UserList[S]):
 
         """
         return self.__class__(
-            [
-                sample
-                for sample in self
-                if sample.files and all(Path(f).exists() for f in sample.files)
-            ],
+            [sample for sample in self if sample.files and all(Path(f).exists() for f in sample.files)]
         )
 
     @property
@@ -528,11 +518,7 @@ class Samples(UserList[S]):
 
         """
         return self.__class__(
-            [
-                sample
-                for sample in self
-                if not sample.files or any(not Path(f).exists() for f in sample.files)
-            ],
+            [sample for sample in self if not sample.files or any(not Path(f).exists() for f in sample.files)]
         )
 
     @property
@@ -548,7 +534,8 @@ class Samples(UserList[S]):
 
         """
         return self.__class__(
-            [sample for sample in self if sample.processed and not sample.failed], output=self.output,
+            [sample for sample in self if sample.processed and not sample.failed],
+            output=self.output,
         )
 
     @property
@@ -564,7 +551,8 @@ class Samples(UserList[S]):
 
         """
         return self.__class__(
-            [sample for sample in self if not sample.failed and not sample.processed], output=self.output,
+            [sample for sample in self if not sample.failed and not sample.processed],
+            output=self.output,
         )
 
     @property

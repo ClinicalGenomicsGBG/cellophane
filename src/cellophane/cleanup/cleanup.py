@@ -47,8 +47,7 @@ class DeferredCleaner:
     ) -> None:
         if ignore_outside_root:
             warn(
-                f"Deferred cleaner does not support {action}ing "
-                "paths outside the root directory",
+                f"Deferred cleaner does not support {action}ing paths outside the root directory"
             )
             return
         rpath = _resolve_path(Path(path), self.root)
@@ -107,13 +106,11 @@ class Cleaner:
         n_external = sum(not t.is_relative_to(self._abs_root) for t in self.trash)
 
         logger.info(
-            f"Cleaning up {pluralize(n_file, 'file', 'files')} "
-            f"and {pluralize(n_dir, 'directory', 'directories')}",
+            f"Cleaning up {pluralize(n_file, 'file', 'files')} and {pluralize(n_dir, 'directory', 'directories')}"
         )
         if n_external:
             logger.warning(
-                f"Removing {pluralize(n_external, 'path', 'paths')} "
-                f"outside {self.root}",
+                f"Removing {pluralize(n_external, 'path', 'paths')} outside {self.root}"
             )
         for path in self.trash:
             if not path.exists():

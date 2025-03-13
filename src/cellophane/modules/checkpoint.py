@@ -59,7 +59,7 @@ class Checkpoint:
                     workdir=self.workdir,
                     # Only src is considered, so using the current time works
                     # since timestamps are never included in src paths
-                    timestamp=time.localtime()
+                    timestamp=time.localtime(),
                 )
                 output_paths = {o.src for o in outputs}
 

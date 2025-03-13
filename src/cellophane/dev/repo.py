@@ -107,9 +107,7 @@ class ModulesRepo(Repo):
         try:
             json_ = self.git.show(f"origin/{self.active_branch.name}:modules.json")
         except GitCommandError as exc:
-            raise InvalidModulesRepoError(
-                self.url, msg="Could not parse modules.json",
-            ) from exc
+            raise InvalidModulesRepoError(self.url, msg="Could not parse modules.json") from exc
         return json.loads(json_)
 
     @property
@@ -180,11 +178,7 @@ class ProjectRepo(Repo):
             List[str]: The list of module names.
 
         """
-        return {
-            name
-            for name, item in self.external.modules.items()
-            if (Path("modules") / name).exists()
-        }
+        return {name for name, item in self.external.modules.items() if (Path("modules") / name).exists()}
 
     @property
     def absent_modules(self) -> set[str]:

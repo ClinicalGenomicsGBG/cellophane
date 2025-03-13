@@ -126,8 +126,8 @@ class Runner:
                 )
 
             except BaseException as exc:  # pylint: disable=broad-except
-                logger.warning(f"Unhandeled exception: {exc!r}", exc_info=exc)
-                cleanup(reason=f"Unhandeled exception in runner '{self.name}' {exc!r}")
+                logger.warning(f"Unhandled exception: {exc!r}", exc_info=exc)
+                cleanup(reason=f"Unhandled exception in runner '{self.name}' {exc!r}")
 
         _resolve_outputs(samples, workdir, config, timestamp, logger)
         for sample in samples.complete:
@@ -246,7 +246,7 @@ def start_runners(
             ):
                 workdir = config.workdir / config.tag / runner_.label
                 if runner_.split_by is not None:
-                    workdir /= group or "unknown"
+                    workdir /= str(group or "unknown")
 
                 result = pool.apply_async(
                     runner_,

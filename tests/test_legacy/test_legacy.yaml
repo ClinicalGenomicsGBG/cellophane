@@ -1,0 +1,33 @@
+- id: dummy
+  external:
+    external_module: modules/external_module
+  structure:
+    modules:
+      a.py: |
+        from cellophane import pre_hook
+
+        def mocked():
+            return "a.mocked WAS CALLED"
+
+        def non_mocked():
+            return "a.non_mocked WAS CALLED"
+
+        @pre_hook()
+        def hook(logger, **_):
+            logger.info("hook WAS CALLED")
+            logger.info(mocked())
+            logger.info(non_mocked())
+  mocks:
+    modules.a.mocked:
+      return_value: "a.mocked WAS MOCKED"
+    modules.external_module.mocked:
+      return_value: "external_module.mocked WAS MOCKED"
+  args:
+    --workdir: work
+    --executor_name: mock
+  logs:
+    - "hook WAS CALLED"
+    - "a.mocked WAS MOCKED"
+    - "a.non_mocked WAS CALLED"
+    - "external_module.mocked WAS MOCKED"
+    - "external_module.non_mocked WAS CALLED"

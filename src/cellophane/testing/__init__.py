@@ -11,6 +11,7 @@ from .hooks import (
     pytest_runtest_makereport,
 )
 from .invocation import BaseTest, Invocation, deferred_invocation, invocation
+from .legacy import parametrize_from_yaml, run_definition
 from .util import PathDict, literal, regex
 
 __all__ = [

@@ -12,6 +12,7 @@ from cellophane import cfg, data
 from cellophane.cfg.click_ import (
     FormattedString,
     ParsedSize,
+    ResilientIntRange,
     StringMapping,
     TypedArray,
 )
@@ -31,24 +32,19 @@ class Test_StringMapping:
         "value,expected",
         [
             param(
-                "a=b,c=d",
+                'a=b,c=d',
                 {"a": "b", "c": "d"},
                 id="simple",
             ),
             param(
-                'a="a",c="d"',
-                {"a": "a", "c": "d"},
-                id="quoted",
-            ),
-            param(
-                "a='a',c='d'",
-                {"a": "a", "c": "d"},
-                id="single quoted",
-            ),
-            param(
-                "a.b.c=d",
+                'a.b.c=d',
                 {"a": {"b": {"c": "d"}}},
                 id="nested",
+            ),
+            param(
+                'a=(b=(c=d))',
+                {"a": {"b": {"c": "d"}}},
+                id="nested_parens",
             ),
             param(
                 "",
@@ -71,19 +67,11 @@ class Test_StringMapping:
                 id="invalid string",
             ),
             param(
-                "a=b,c=,d=e",
-                id="missing value",
-            ),
-            param(
-                "a=b,=d,d=e",
+                '{:"b"}',
                 id="missing key",
             ),
             param(
-                "a=b,c=d,e",
-                id="missing separator",
-            ),
-            param(
-                "a=b,!c=d",
+                '{!a: "b"}',
                 id="invalid key",
             ),
         ],
@@ -116,7 +104,7 @@ class Test_TypedArray:
         expected: list[int],
     ) -> None:
         """Test TypedArray.convert."""
-        _array = cfg.click_.TypedArray(item_type)
+        _array = cfg.click_.TypedArray({"type": item_type})
         assert _array.convert(value, None, None) == expected  # type: ignore[arg-type]
 
     @staticmethod
@@ -144,7 +132,7 @@ class Test_TypedArray:
     ) -> None:
         """Test TypedArray.convert exceptions."""
         with raises(exception):
-            _array = cfg.click_.TypedArray(item_type)  # type: ignore[arg-type]
+            _array = cfg.click_.TypedArray({"type": item_type})  # type: ignore[arg-type]
             _array.convert(value, None, None)  # type: ignore[arg-type]
 
 
@@ -297,11 +285,11 @@ class Test_Flag:
                 )
                 for type_, pytype, kwargs in [
                     ("string", FormattedString(), {}),
-                    ("integer", int, {}),
-                    ("integer", click.IntRange(min=0), {"min": 0}),
-                    ("number", float, {}),
+                    ("integer", ResilientIntRange(), {}),
+                    ("integer", ResilientIntRange(min=0), {"min": 0}),
+                    ("number", click.FloatRange(), {}),
                     ("number", click.FloatRange(min=0), {"min": 0}),
-                    ("array", TypedArray("string"), {}),
+                    ("array", TypedArray({"type": "string"}), {}),
                     ("mapping", StringMapping(), {}),
                     ("path", click.Path(), {}),
                     ("size", ParsedSize(), {}),
@@ -421,78 +409,3 @@ class Test__get_flags:
 
         if flags_base := _definition.get("flags_base"):
             assert cfg.get_flags(_schema) == [cfg.Flag(**flag) for flag in flags_base]
-
-
-class Test_Config:
-    """Test cfg.Config."""
-
-    @staticmethod
-    @mark.parametrize(
-        "definition",
-        [
-            param(LIB / "schema" / "config" / "from_data.yaml", id="from_data"),
-            param(LIB / "schema" / "config" / "from_cli.yaml", id="from_cli"),
-            param(LIB / "schema" / "config" / "from_kwargs.yaml", id="from_kwargs"),
-        ],
-    )
-    def test_config(definition: Path) -> None:
-        """Test cfg.Config."""
-        _definition = _YAML.load(definition.read_text())
-        _schema: cfg.Schema = cfg.Schema(_definition["schema"])
-        _config = _definition["config"]
-
-        if _data := _definition.get("data"):
-            assert _config == data.as_dict(cfg.Config(_schema, _data=_data))
-
-        if _kwargs := _definition.get("kwargs"):
-            assert _config == data.as_dict(cfg.Config(_schema, **_kwargs))
-
-        if _cli := _definition.get("cli"):
-
-            @click.command()
-            def _cli(**kwargs: Any) -> None:
-                kwargs.pop("config_file")
-                _config = cfg.Config(_schema, **kwargs)
-                _YAML.dump(data.as_dict(_config), sys.stdout)
-
-            _cli = reduce(lambda x, y: y.click_option(x), cfg.get_flags(_schema), _cli)
-            runner = CliRunner()
-
-            result = runner.invoke(_cli, _definition["cli"])
-
-            try:
-                result_parsed = _YAML.load(result.stdout)
-            except Exception:  # pylint: disable=broad-except
-                fail(reason=result.stdout)
-            else:
-                assert result_parsed == _config, result.output
-
-    @mark.parametrize(
-        "kwargs,expected",
-        [
-            param(
-                {"a": "CONFIG"},
-                cfg.Flag(key=("a",), type="string", default="SCHEMA", value="CONFIG"),
-                id="from_config",
-            ),
-            param(
-                {},
-                cfg.Flag(key=("a",), type="string", default="SCHEMA", value="SCHEMA"),
-                id="from_schema",
-            ),
-            param(
-                {"include_defaults": False},
-                cfg.Flag(key=("a",), type="string", default="SCHEMA", value=None),
-                id="no_include_defaults",
-            ),
-        ],
-    )
-    def test_flags(self, kwargs: dict, expected: cfg.Flag) -> None:
-        """Test cfg.Config.flags."""
-        _definition = _YAML.load(
-            (LIB / "schema" / "flags" / "default.yaml").read_text(),
-        )
-        _schema = cfg.Schema(_definition["schema"])
-        _config = cfg.Config(_schema, allow_empty=True, **kwargs)
-
-        assert cfg.get_flags(_schema, data.as_dict(_config)) == [expected]

@@ -88,7 +88,7 @@ def cellophane(label: str, root: Path) -> click.Command:
         def inner(config: Config, **_: Any) -> None:
             """Run cellophane"""
             start_time = time.localtime()
-            config.tag = config.tag or time.strftime("%y%m%d-%H%M%S", start_time)
+            config.tag = config.get("tag", time.strftime("%y%m%d-%H%M%S", start_time))
 
             handle_warnings()
             console_handler.setLevel(config.log.level)

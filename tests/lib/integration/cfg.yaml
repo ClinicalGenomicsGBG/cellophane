@@ -37,7 +37,7 @@
     --a: "INVALID"
     --workdir: out
   exception: |-
-    BadParameter("'INVALID' is not a valid float.")
+    BadParameter("'INVALID' is not a valid float range.")
 
 - id: bad_format
   structure:
@@ -84,7 +84,7 @@
     --a: "INVALID"
     --workdir: out
   exception: |-
-    BadParameter('Expected a comma separated mapping (a=b,x=y), got INVALID')
+    BadParameter('Expected a mapping (a=b,x=y), got INVALID')
 
 - id: bad_item_type
   structure:
@@ -95,10 +95,10 @@
           items:
             type: number
   args:
-    --a: !!python/tuple ["INVALID"]
+    --a: '"INVALID"'
     --workdir: out
   exception: |-
-    BadParameter("could not convert string to float: 'INVALID'")
+    BadParameter("Unable to convert value: 'INVALID' is not a valid float range.")
 
 - id: invalid_item_type
   structure:
@@ -146,7 +146,7 @@
     --a: "INVALID"
     --workdir: out
   exception: |-
-    BadParameter("'INVALID' does not match pattern: '^[a-z]+$'")
+    BadParameter("'INVALID' does not match pattern '^[a-z]+$'")
 
 - &parse_config
   id: parse_config
@@ -216,8 +216,8 @@
       boolean:
         a: true
         b: false
-      typed_array: [1, 3, 3, 7]
-      array: [1, 3, 3, 7]
+      typed_array: ["1", 3.0, "3.0", 7]
+      array: ["1", 3.0, "3.0", 7]
       mapping:
         a: "a"
         b: 1
@@ -245,9 +245,9 @@
   - key='typed_array' i=3 v=7 (int)
   - key='array' (list)
   - key='array' i=0 v='1' (str)
-  - key='array' i=1 v='3' (str)
-  - key='array' i=2 v='3' (str)
-  - key='array' i=3 v='7' (str)
+  - key='array' i=1 v=3.0 (float)
+  - key='array' i=2 v='3.0' (str)
+  - key='array' i=3 v=7 (int)
   - key='mapping' (PreservedDict)
   - key='mapping' k='a' v='a' (str)
   - key='mapping' k='b' v=1 (int)
@@ -267,8 +267,8 @@
     --integer: "1"
     --boolean_a: ~
     --boolean_no_b: ~
-    --typed_array: !!python/tuple [1, 3, 3, 7]
-    --array: !!python/tuple [1, 3, 3, 7]
+    --typed_array: "'1',3.0,'3.0',7"
+    --array: "'1',3.0,'3.0',7"
     --mapping: a="a",b=1,c=1.0,d.e="e",d.f=42
     --path: "path/to/file"
     --size: "1 GB"

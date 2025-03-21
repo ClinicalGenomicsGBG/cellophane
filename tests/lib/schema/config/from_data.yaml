@@ -35,6 +35,12 @@ schema:
               properties:
                 c:
                   type: string
+    nested_array:
+      type: array
+      items:
+        type: array
+        items:
+          type: string
 
 data: &data
   string: "STRING"
@@ -51,7 +57,9 @@ data: &data
   - 3.0
   mapping_array:
   - a: "X"
-  - b: "Y"
+    b: "Y"
+  - c: "X"
+    d: "Y"
   mapping:
     a: "X"
     b: "Y"
@@ -59,6 +67,11 @@ data: &data
     a:
       b:
         c: "Z"
+  nested_array:
+  - - "a"
+    - "b"
+  - - "c"
+    - "d"
 
 config:
   <<: *data

@@ -41,10 +41,18 @@ class Executor:
     config: cfg.Config
     uuid: UUID = field(init=False)
 
-    def __init_subclass__(cls, *args: Any, name: str, **kwargs: Any) -> None:
+    def __init_subclass__(
+        cls,
+        *args: Any,
+        name: str | None = None,
+        **kwargs: Any,
+    ) -> None:
         """Register the class in the registry."""
         super().__init_subclass__(*args, **kwargs)
-        cls.name = name or cls.__name__.lower()
+        if name is not None:
+            cls.name = name
+        elif not hasattr(cls, "name"):
+            cls.name = cls.__name__.lower()
 
     def __init__(self, *args: Any, log_queue: mp.Queue, **kwargs: Any) -> None:
         """Initialize the executor."""

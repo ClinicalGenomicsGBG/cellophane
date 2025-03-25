@@ -57,6 +57,8 @@ def _apply_mixins(
         name_ += f"_{mixin.__name__}"
         if "__attrs_attrs__" not in mixin.__dict__:
             mixin = define(mixin, slots=False)
+        if cls not in mixin.__bases__:
+            mixin.__bases__ = (cls,)
 
         mixins_.append(mixin)
 

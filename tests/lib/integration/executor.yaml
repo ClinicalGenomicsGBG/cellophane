@@ -1,25 +1,24 @@
 - id: executor_submit
-  mocks:
-    cellophane.executors.executor.uuid4:
-      return_value: !!python/object/apply:uuid.UUID ["deadbeefdeadbeefdeadbeefdeadbeef"]
-
   structure:
     modules:
       dummy.py: |
         from cellophane import pre_hook, runner, Executor, executors
+        from uuid import UUID
 
         @pre_hook()
         def runner_a(logger, samples, executor, **_):
             logger.info(f"HOOK - {executor.name=}")
             logger.info(f"HOOK - {executors.EXECUTOR.name=}")
-            executor.submit("ping localhost -c 1", wait=True, name="HOOK")
+            uuid_ = UUID("deadbeefdeadbeefdeadbeefdeadbeef")
+            executor.submit("ping localhost -c 1", wait=True, name="HOOK", uuid=uuid_)
             return samples
 
         @runner()
         def runner_b(logger, samples, executor, **_):
             logger.info(f"RUNNER - {executor.name=}")
             logger.info(f"RUNNER - {executors.EXECUTOR.name=}")
-            executor.submit("ping localhost -c 1", wait=True, name="RUNNER")
+            uuid_ = UUID("cafebabecafebabecafebabecafebabe")
+            executor.submit("ping localhost -c 1", wait=True, name="RUNNER", uuid=uuid_)
             return samples
 
     samples.yaml: |
@@ -43,25 +42,25 @@
   - MockExecutor called with name='HOOK'
   - cmdline=ping localhost -c 1
   - uuid=deadbeef-dead-beef-dead-beefdeadbeef
+  - uuid=cafebabe-cafe-babe-cafe-babecafebabe
   - workdir=out/deadbeefdeadbeefdeadbeefdeadbeef
+  - workdir=out/cafebabecafebabecafebabecafebabe
   - os_env=True
   - cpus=1
   - memory=2000000000
 
 
 - id: executor_subprocess
-  mocks:
-    cellophane.executors.executor.uuid4:
-      return_value: !!python/object/apply:uuid.UUID ["deadbeefdeadbeefdeadbeefdeadbeef"]
-
   structure:
     modules:
       dummy.py: |
         from cellophane import pre_hook
+        from uuid import UUID
 
         @pre_hook()
         def runner_a(logger, samples, executor, config, **_):
-            result, uuid = executor.submit("ping localhost -c 1", wait=True)
+            uuid_ = UUID("deadbeefdeadbeefdeadbeefdeadbeef")
+            result, uuid = executor.submit("ping localhost -c 1", wait=True, uuid=uuid_)
 
   args:
     --workdir: out
@@ -72,19 +71,18 @@
   - "Job completed: deadbeef-dead-beef-dead-beefdeadbeef"
 
 - id: executor_subprocess_terminate
-  mocks:
-    cellophane.executors.executor.uuid4:
-      return_value: !!python/object/apply:uuid.UUID ["deadbeefdeadbeefdeadbeefdeadbeef"]
 
   structure:
     modules:
       dummy.py: |
         from cellophane import pre_hook
         from time import sleep
+        from uuid import UUID
 
         @pre_hook()
         def runner_a(logger, samples, executor, config, **_):
-            executor.submit("ping localhost -c 2")
+            uuid_ = UUID("deadbeefdeadbeefdeadbeefdeadbeef")
+            executor.submit("ping localhost -c 2", uuid=uuid_)
             executor.terminate()
             executor.wait()
   args:
@@ -98,18 +96,16 @@
   - "Job failed: deadbeef-dead-beef-dead-beefdeadbeef"
 
 - id: executor_conda
-  mocks:
-    cellophane.executors.executor.uuid4:
-      return_value: !!python/object/apply:uuid.UUID ["deadbeefdeadbeefdeadbeefdeadbeef"]
-
   structure:
     modules:
       dummy.py: |
         from cellophane import pre_hook, Executor
         from pathlib import Path
+        from uuid import UUID
 
         @pre_hook()
         def runner_a(logger, samples, executor, config, **_):
+            uuid_ = UUID("deadbeefdeadbeefdeadbeefdeadbeef")
             result, uuid = executor.submit(
               "ping localhost -c 1",
               wait=True,
@@ -118,6 +114,7 @@
                   "python >=3.8,<3.9"
                 ]
               },
+              uuid=uuid_
             )
 
   args:

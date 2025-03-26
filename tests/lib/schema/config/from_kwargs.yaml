@@ -35,6 +35,12 @@ schema: &schema
               properties:
                 c:
                   type: string
+    nested_array:
+      type: array
+      items:
+        type: array
+        items:
+          type: string
 
 kwargs:
   string: "STRING"
@@ -51,11 +57,18 @@ kwargs:
   - 3.0
   mapping_array:
   - a: "X"
-  - b: "Y"
+    b: "Y"
+  - c: "X"
+    d: "Y"
   mapping:
     a: "X"
     b: "Y"
   nested_a_b_c: "Z"
+  nested_array:
+  - - "a"
+    - "b"
+  - - "c"
+    - "d"
 
 config:
   string: "STRING"
@@ -72,7 +85,9 @@ config:
   - 3.0
   mapping_array:
   - a: "X"
-  - b: "Y"
+    b: "Y"
+  - c: "X"
+    d: "Y"
   mapping:
     a: "X"
     b: "Y"
@@ -80,4 +95,9 @@ config:
     a:
       b:
         c: "Z"
+  nested_array:
+  - - "a"
+    - "b"
+  - - "c"
+    - "d"
 

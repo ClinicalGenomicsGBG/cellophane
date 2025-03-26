@@ -121,10 +121,7 @@ def properties_(
                 "enum": subschema.get("enum"),
                 "description": subschema.get("description"),
                 "secret": subschema.get("secret", False),
-                "items_type": subschema.get("items", {}).get("type"),
-                "items_format": subschema.get("items", {}).get("format"),
-                "items_min": subschema.get("items", {}).get("minimum"),
-                "items_max": subschema.get("items", {}).get("maximum"),
+                "items": subschema.get("items"),
                 "format": subschema.get("format"),
                 "pattern": subschema.get("pattern"),
                 "min": subschema.get("minimum"),
@@ -157,11 +154,11 @@ def required_(
     if instance is not None:
         for prop in required:
             subschema = schema.get("properties", {}).get(prop)
-            if not (
-                subschema is None
-                or "default" in subschema
-                or "properties" in subschema
-                or prop in instance
+            if (
+                subschema is not None
+                and "default" not in subschema
+                and "properties" not in subschema
+                and prop not in instance
             ):
                 key = (*(_path or ()), prop)
                 flags[key] = flags.get(key, Flag(key=key))
@@ -282,15 +279,15 @@ def if_(
 
 
 @singledispatch
-def get_flags(schema: data.Container, _data: Mapping | None = None) -> list[Flag]:
+def get_flags(schema: data.Container, data_: Mapping | None = None) -> list[Flag]:
     """Get the flags for a configuration schema."""
-    return get_flags(util.freeze(data.as_dict(schema)), util.freeze(_data))
+    return get_flags(util.freeze(data.as_dict(schema)), util.freeze(data_))
 
 
 @get_flags.register
 @cache
-def _(schema: frozendict, _data: frozendict | None = None) -> list[Flag]:
-    data_thawed = util.unfreeze(_data)
+def _(schema: frozendict, data_: frozendict | None = None) -> list[Flag]:
+    data_thawed = util.unfreeze(data_)
     schema_thawed = util.unfreeze(schema)
     flags: dict[tuple[str, ...], Flag] = {}
 

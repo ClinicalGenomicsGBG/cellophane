@@ -1,7 +1,8 @@
 """Configuration file handling and CLI generation"""
 
+from functools import wraps
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 import rich_click as click
 from ruamel.yaml import YAML
@@ -16,7 +17,7 @@ from .schema import Schema
 def with_options(schema: Schema) -> Callable:
     """Creates a decorator for adding command-line interface from a schema.
 
-    The callback will be passed a Config object as the first argument.
+    The callback will be passed a Container object with the config as the first argument.
 
     Args:
     ----
@@ -29,7 +30,7 @@ def with_options(schema: Schema) -> Callable:
     Examples:
     --------
         @options(schema)
-        def cli(config: Config, **kwargs):
+        def cli(config: Container, **kwargs):
             ...
 
     """
@@ -52,7 +53,7 @@ def with_options(schema: Schema) -> Callable:
             nonlocal callback
 
             try:
-                config_data = (
+                config_container = data.Container(
                     YAML(typ="safe").load(config_file)
                     if config_file is not None
                     else {}
@@ -62,41 +63,48 @@ def with_options(schema: Schema) -> Callable:
 
             # Create a dummy command to collect any flags that are passed
             _dummy_cmd = click.command()(lambda: None)
-            for flag in get_flags(schema):
-                _dummy_cmd = flag.click_option(_dummy_cmd)
+            _flags = {flag.flag: flag for flag in get_flags(schema)}
+            for flag in _flags.values():
+                _dummy_cmd = flag.dummy_click_option(_dummy_cmd)
+
             _dummy_ctx = _dummy_cmd.make_context(
                 ctx.info_name,
                 ctx.args.copy(),
                 resilient_parsing=True,
             )
-            _dummy_params = {
-                param: value
-                for param, value in _dummy_ctx.params.items()
-                if value is not None
-                and (src := _dummy_ctx.get_parameter_source(param))
-                and src.name != "DEFAULT"
-            }
+            for param, value in _dummy_ctx.params.items():
+                if (
+                    value is not None
+                    and (src := _dummy_ctx.get_parameter_source(param))
+                    and src.name != "DEFAULT"
+                    and (flag := _flags.get(param))
+                ):
+                    config_container[flag.key] = value
 
-            # Merge config file and the commandline arguments into a single config
-            config = Config(
-                schema=schema,
-                tag=_dummy_params.pop("tag", None),
-                include_defaults=False,
-                _data=config_data,
-                **_dummy_params,
-            )
+            # Set the config file path
+            config_container.config_file = config_file
 
             # Set the workdir, resultdir, and logdir (if possible)
-            if "workdir" in config:
-                (config["resultdir"], config["logdir"]) = (
-                    config.get("resultdir", config.workdir / "results"),
-                    config.get("logdir", config.workdir / "logs"),
-                )
+            if "workdir" in config_container:
+                workdir = Path(config_container.workdir)
+                config_container.resultdir = config_container.get("resultdir", workdir / "results")
+                config_container.logdir = config_container.get("logdir", workdir / "logs")
 
             # Add flags to the callback with the values from the dummy command
-            callback = click.make_pass_decorator(Config)(callback)
-            _callback = click.command(callback)
-            for flag in get_flags(schema, data.as_dict(config)):
+            _final_flags = {flag.flag: flag for flag in get_flags(schema, data.as_dict(config_container))}
+
+            @click.command()
+            @wraps(callable)
+            def _callback(**kwargs: Any) -> Any:
+                config = Config(schema=schema)
+                for kwarg, flag in _final_flags.items():
+                    if kwarg not in kwargs:
+                        continue
+                    if kwargs[kwarg] is not None:
+                        config[flag.key] = kwargs[kwarg]
+                return callback(config)
+
+            for flag in _final_flags.values():
                 _callback = flag.click_option(_callback)
 
             # Create the callback context and forward arguments
@@ -104,16 +112,10 @@ def with_options(schema: Schema) -> Callable:
                 ctx.info_name,
                 ctx.args.copy(),
             )
-
-            # Inner function expects a Config object as the first argument
-            callback_ctx.obj = config
-
-            # Ensure that the configuration is complete
-            callback_ctx.obj.set_defaults()
-
             # Invoke the callback
             callback_ctx.forward(_callback)
 
         return inner
 
     return wrapper
+

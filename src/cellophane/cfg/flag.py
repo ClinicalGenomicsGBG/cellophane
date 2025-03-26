@@ -8,7 +8,6 @@ from attrs import define, field, setters
 
 from .click_ import (
     FORMATS,
-    ITEMS_TYPES,
     SCHEMA_TYPES,
     FormattedString,
     InvertibleParamType,
@@ -35,7 +34,7 @@ class Flag:
     ----------
         key (list[str] | None): The key associated with the flag.
         type SCHEMA_TYPES: The JSONSchema type of the flag.
-        items ITEMS_TYPES: The JSONSchema items type of the flag.
+        items SCHEMA_TYPES: The JSONSchema items type of the flag.
         format_ FORMATS: The JSONSchema format of the flag.
         minimum (int | None): The minimum value of the flag.
         maximum (int | None): The maximum value of the flag.
@@ -56,18 +55,7 @@ class Flag:
 
     key: tuple[str, ...] = field(converter=_convert_tuple, on_setattr=setters.convert)
     type: SCHEMA_TYPES | None = field(default=None)
-    items_type: ITEMS_TYPES | None = field(default=None)
-    items_format: FORMATS | None = field(default=None)
-    items_min: int | None = field(
-        default=None,
-        converter=_convert_float,
-        on_setattr=setters.convert,
-    )
-    items_max: int | None = field(
-        default=None,
-        converter=_convert_float,
-        on_setattr=setters.convert,
-    )
+    items: dict | None = field(default=None)
     min: int | None = field(
         default=None,
         converter=_convert_float,
@@ -149,10 +137,7 @@ class Flag:
             min_=self.min,
             max_=self.max,
             enum=self.enum,
-            items_type=self.items_type,
-            items_format=self.items_format,
-            items_min=self.items_min,
-            items_max=self.items_max,
+            items=self.items,
         )
 
     @property
@@ -194,29 +179,44 @@ class Flag:
             Callable: A click.option decorator
 
         """
+
+        type_ = self.click_type
+        default = self.default if self.value is None else self.value
         return click.option(
             (
                 f"--{self.flag}/--{self.no_flag}"
                 if self.type == "boolean"
                 else f"--{self.flag}"
             ),
-            type=self.click_type,
-            multiple=self.items_type == "array",
-            default=(
-                True
-                if self.type == "boolean" and self.default is None
-                else self.value or self.default
-            ),
+            type=type_,
+            default=True if self.type == "boolean" and default is None else default,
             required=self.required,
             help=self.description,
             show_default=(
-                False
-                if self.secret or (self.value or self.default) is None
-                else (
-                    self.click_type.invert(default)
-                    if (default := self.value or self.default)
-                    and isinstance(self.click_type, InvertibleParamType)
+                (self.secret or default is None)
+                or (
+                    type_.invert(default)  # type: ignore[arg-type]
+                    if default and isinstance(type_, InvertibleParamType)
                     else str(default)
                 )
             ),
+        )
+
+    @property
+    def dummy_click_option(self) -> Callable:
+        """Construct a barebones click.option decorator from a Flag"
+
+        Only specifies the flag name and type, without any additional options.
+
+        Returns
+        -------
+            Callable: A click.option decorator
+        """
+        return click.option(
+            (
+                f"--{self.flag}/--{self.no_flag}"
+                if self.type == "boolean"
+                else f"--{self.flag}"
+            ),
+            type=bool if self.type == "boolean" else None,
         )

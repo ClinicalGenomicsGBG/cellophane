@@ -12,8 +12,6 @@ schema:
       type: boolean
     array:
       type: array
-      items:
-        type: string
     typed_array:
       type: array
       items:
@@ -35,16 +33,23 @@ schema:
               properties:
                 c:
                   type: string
+    nested_array:
+      type: array
+      items:
+        type: array
+        items:
+          type: string
 
 cli: [
   "--string", "STRING",
   "--integer", "1337",
   "--number", "13.37",
   "--boolean",
-  "--array", ["one", "two", "three"],
-  "--typed_array", ["1.0", "2.0", "3.0"],
-  "--mapping_array", ["a=X", "b=Y"],
-  "--mapping", "a=X,b=Y",
+  "--array", '"one","two","three"',
+  "--typed_array", '"1.0","2.0","3.0"',
+  "--mapping_array", '(a=X,b=Y),(c=X,d=Y)',
+  "--nested_array", "(a,b),(c,d)",
+  "--mapping", 'a=X,b=Y',
   "--nested_a_b_c", "Z"
 ]
 
@@ -63,7 +68,9 @@ config:
   - 3.0
   mapping_array:
   - a: "X"
-  - b: "Y"
+    b: "Y"
+  - c: "X"
+    d: "Y"
   mapping:
     a: "X"
     b: "Y"
@@ -71,3 +78,8 @@ config:
     a:
       b:
         c: "Z"
+  nested_array:
+  - - a
+    - b
+  - - c
+    - d

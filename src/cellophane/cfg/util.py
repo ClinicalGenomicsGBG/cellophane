@@ -12,6 +12,19 @@ from cellophane import data
 class _BLANK:
     """Represents a blank value in YAML"""
 
+def extract_parens(value: str, open: str = "(", close: str = ")") -> str:
+    _iter = iter(value)
+    _counter = 0
+    _idx = 0
+    while char := next(_iter, None):
+        _counter += (char == open) - (char == close)
+        if _counter == 0:
+            break
+        _idx += 1
+    if _idx == 0 or _counter != 0:
+        raise ValueError(f"Invalid value: {value}")
+    return value[1:_idx]
+
 
 def dump_yaml(data_: Any) -> str:
     """Dumps data to a YAML string"""

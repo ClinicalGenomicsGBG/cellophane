@@ -188,6 +188,7 @@ class Flag:
                 if self.type == "boolean"
                 else f"--{self.flag}"
             ),
+            self.flag,
             type=type_,
             default=True if self.type == "boolean" and default is None else default,
             required=self.required,

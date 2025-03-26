@@ -208,6 +208,8 @@
           type: size
         no_type:
           default: "DEFAULT"
+        mIxEdCaSe:
+          type: string
     config.yaml: |
       string: "string"
       override: "CONFIG"
@@ -227,6 +229,7 @@
           f: 42
       path: "path/to/file"
       size: 1 GB
+      mIxEdCaSe: "MiXiTuP"
   args:
     --config_file: config.yaml
     --override: "CLI"
@@ -256,6 +259,7 @@
   - key='path' value=PosixPath('path/to/file') (PosixPath)
   - key='size' value=1000000000 (int)
   - key='no_type' value='DEFAULT' (str)
+  - key='mIxEdCaSe' value='MiXiTuP' (str)
 
 - <<: *parse_config
   id: parse_flags
@@ -272,3 +276,4 @@
     --mapping: a="a",b=1,c=1.0,d.e="e",d.f=42
     --path: "path/to/file"
     --size: "1 GB"
+    --mIxEdCaSe: "MiXiTuP"

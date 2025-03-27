@@ -3,6 +3,9 @@ from pytest import mark
 
 UUID4_REGEX = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 UUID4_HEX_REGEX = r"[0-9a-f]{32}"
+UUID_SHORT_REGEX = r"[0-9a-f]{8}"
+TIMESTAMP_REGEX = r"[0-9]{6}-[0-9]{6}"
+PID_REGEX = r"[0-9]{1,5}"
 
 class Test_executor_submit(BaseTest):
     args = [
@@ -56,7 +59,9 @@ class Test_executor_submit(BaseTest):
         )
         assert invocation.logs == regex(
             f"uuid={UUID4_REGEX}",
-            f"workdir=out/{UUID4_HEX_REGEX}",
+            f"workdir=out/{TIMESTAMP_REGEX}/runner_b/RUNNER\\.{UUID4_HEX_REGEX}\\.mock",
+            f"workdir=out/{TIMESTAMP_REGEX}/HOOK\\.{UUID4_HEX_REGEX}\\.mock",
+
         )
 
     @mark.override(
@@ -75,8 +80,9 @@ class Test_executor_submit(BaseTest):
     def test_subprocess_executor(self, invocation: Invocation) -> None:
         assert invocation.logs == regex(
             "Using subprocess executor",
-            "exited with code 0",
-            f"Job completed: {UUID4_REGEX}",
+            f"Starting subprocess job 'subprocess_job' \\(UUID={UUID_SHORT_REGEX}\\)",
+            f"Started process \\(pid={PID_REGEX}\\) for job 'subprocess_job' \\(UUID={UUID_SHORT_REGEX}\\)",
+            f"Completed subprocess job 'subprocess_job' \\(UUID={UUID_SHORT_REGEX}\\)",
         )
 
     @mark.override(
@@ -98,11 +104,13 @@ class Test_executor_submit(BaseTest):
     )
     def test_subprocess_executor_terminate(self, invocation: Invocation) -> None:
         assert invocation.logs == regex(
-            "Started process",
-            f"Terminating job with uuid {UUID4_REGEX}",
-            "Terminating process",
-            "exited with code -15",
-            f"Job failed: {UUID4_REGEX}",
+            f"Started process \\(pid={PID_REGEX}\\) for job 'subprocess_job' \\(UUID={UUID_SHORT_REGEX}\\)",
+            f"Starting subprocess job 'subprocess_job' \\(UUID={UUID_SHORT_REGEX}\\)",
+            f"Started process \\(pid={PID_REGEX}\\) for job 'subprocess_job' \\(UUID={UUID_SHORT_REGEX}\\)",
+            f"Terminating subprocess job 'subprocess_job' \\(UUID={UUID_SHORT_REGEX}\\)",
+            f"Terminating process \\(pid={PID_REGEX}\\)",
+            f"Process \\(pid={PID_REGEX}\\) exited with code -15",
+            f"Error in subprocess job 'subprocess_job' \\(UUID={UUID_SHORT_REGEX}\\)",
         )
 
     @mark.override(
@@ -148,17 +156,16 @@ class Test_executor_submit(BaseTest):
 
                 @pre_hook()
                 def runner_a(executor, **_):
-                    result, uuid = executor.submit("ping localhost -c 1")
+                    result, uuid = executor.submit("ping localhost -c 1", wait=True)
             """,
         },
     )
     def test_subprocess_executor_command_non_zero(self, invocation: Invocation) -> None:
-        assert invocation.logs == literal(
-            "Process (pid=1) exited with code 1337",
-            "Command failed with exit code: 1337",
-        )
         assert invocation.logs == regex(
-            f"Job failed: {UUID4_REGEX}",
+            f"Starting subprocess job 'subprocess_job' \\(UUID={UUID_SHORT_REGEX}\\)",
+            f"Started process \\(pid=1\\) for job 'subprocess_job' \\(UUID={UUID_SHORT_REGEX}\\)",
+            f"Non-zero exit code \\(1337\\) for subprocess job 'subprocess_job' \\(UUID={UUID_SHORT_REGEX}\\)",
+            f"Error in subprocess job 'subprocess_job' \\(UUID={UUID_SHORT_REGEX}\\)",
         )
 
     @mark.override(
@@ -182,11 +189,9 @@ class Test_executor_submit(BaseTest):
     def test_subprocess_executor_command_exception(
         self, invocation: Invocation
     ) -> None:
-        assert invocation.logs == literal(
-            "Command failed with exception: Exception('BOOM')",
-        )
         assert invocation.logs == regex(
-            f"Job failed: {UUID4_REGEX}",
+            f"Exception in subprocess job 'subprocess_job' \\(UUID={UUID_SHORT_REGEX}\\): Exception\\('BOOM'\\)",
+            f"Error in subprocess job 'subprocess_job' \\(UUID={UUID_SHORT_REGEX}\\)",
         )
 
     @mark.override(
@@ -212,9 +217,7 @@ class Test_executor_submit(BaseTest):
     def test_subprocess_executor_callback_exception(
         self, invocation: Invocation
     ) -> None:
-        assert invocation.logs == literal(
-            "Callback failed: Exception('BOOM')",
-        )
         assert invocation.logs == regex(
-            f"Job failed: {UUID4_REGEX}",
+            f"Exception in callback of subprocess job 'subprocess_job' \\(UUID={UUID_SHORT_REGEX}\\): Exception\\('BOOM'\\)",
+            f"Error in subprocess job 'subprocess_job' \\(UUID={UUID_SHORT_REGEX}\\)",
         )

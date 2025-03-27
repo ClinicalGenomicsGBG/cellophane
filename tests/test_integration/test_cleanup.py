@@ -108,7 +108,7 @@ class Test_cleanup(BaseTest):
     def test_cleanup_non_root(self, invocation: Invocation) -> None:
         assert invocation.logs == literal(
             "NON_ROOT outside out/DUMMY",
-            "Cleaning up 2 files and 1 directory",
+            "Cleaning up 3 files and 1 directory",
             "Removing 2 paths outside out/DUMMY",
             "out/DOES_NOT_EXIST does not exist",
             "Removing out/DUMMY",

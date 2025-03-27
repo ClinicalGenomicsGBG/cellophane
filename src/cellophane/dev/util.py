@@ -1,19 +1,21 @@
 """Utility functions for cellophane dev command-line interface."""
 
+import logging
 import re
-from functools import wraps
+from contextlib import suppress
 from pathlib import Path
-from typing import Any, Callable, Iterable, Sequence
+from textwrap import dedent
+from typing import Iterable, Literal
 
-from git import GitCommandError, Remote, Repo
+from git import GitCommandError, IndexFile, Repo
 from questionary import Choice, checkbox, select
 from rich.console import Console
 
 from cellophane import CELLOPHANE_ROOT, Schema
 
 from .exceptions import (
-    InvalidModuleError,
-    InvalidVersionError,
+    InvalidModulesError,
+    InvalidVersionsError,
     NoModulesError,
     NoVersionsError,
 )
@@ -77,7 +79,7 @@ def update_example_config(path: Path) -> None:
         handle.write(schema.example_config)
 
 
-def ask_modules(valid_modules: Iterable[str]) -> list[tuple[str, None, None]]:
+def ask_modules(valid_modules: Iterable[str]) -> list[str]:
     """Ask the user to select one or more modules.
 
     Args:
@@ -90,18 +92,18 @@ def ask_modules(valid_modules: Iterable[str]) -> list[tuple[str, None, None]]:
 
     _modules = checkbox(
         "Select module(s)",
-        choices=[Choice(title=m, value=(m, None, None)) for m in valid_modules],
+        choices=[Choice(title=module, value=module) for module in valid_modules],
         erase_when_done=True,
         validate=lambda x: len(x) > 0 or "Select at least one module",
     ).ask()
     Console().show_cursor()
-    if _modules:
-        return _modules
+    if not _modules:
+        raise NoModulesError("No modules selected")
 
-    raise NoModulesError("No modules selected")
+    return _modules
 
 
-def ask_version(module_: str, valid: Iterable[tuple[str, str]]) -> tuple[str, str, str]:
+def ask_version(module_: str, valid_versions: Iterable[tuple[str, str]]) -> tuple[str, str]:
     """Ask the user to select a version for a module.
 
     Args:
@@ -110,70 +112,56 @@ def ask_version(module_: str, valid: Iterable[tuple[str, str]]) -> tuple[str, st
       modules_repo (ModulesRepo): The modules repository.
 
     """
-    if not valid:
+    if not valid_versions:
         raise NoVersionsError(f"No compatible versions for module '{module_}'")
 
     _versions = select(
         f"Select version for {module_}",
-        choices=[Choice(title=version, value=(module_, tag, version)) for version, tag in valid],
+        choices=[Choice(title=version, value=(tag, version)) for version, tag in valid_versions],
         erase_when_done=True,
     ).ask()
     Console().show_cursor()
 
-    if _versions:
-        return _versions
+    if not _versions:
+        raise NoVersionsError("No version selected")
 
-    raise NoVersionsError("No version selected")
+    return _versions
 
 
-def with_modules(ignore_branch: bool = False) -> Callable:
-    """Decorator for commands that require modules."""
+def add_version_tags(
+    modules: list[tuple[str, str]] | list[tuple[str, None]] | None,
+    valid_modules: set[str],
+    repo: ProjectRepo,
+    skip_version: bool = False,
+) -> list[tuple[str, str | None, str | None]]:
+    if modules is not None:
+        if invalid_modules := {m for m, _ in modules} - valid_modules:
+            raise InvalidModulesError([*invalid_modules])
+        elif invalid_versions := {
+            (module, version)
+            for module, version in modules
+            if version is not None and version != "latest" and version not in repo.external.modules[module]["versions"]
+        }:
+            raise InvalidVersionsError([*invalid_versions])
 
-    def wrapper(func: Callable) -> Callable:
-        @wraps(func)
-        def inner(
-            modules: list[tuple[str, str]] | list[tuple[str, None]] | None,
-            valid_modules: Sequence[str],
-            repo: ProjectRepo,
-            **kwargs: Any,
-        ) -> None:
-            if invalid_modules := {m for m, _ in modules or []} - set(valid_modules):
-                raise InvalidModuleError(invalid_modules.pop())
+    versioned_modules = modules or [(module, None) for module in ask_modules(valid_modules)]
+    result: list[tuple[str, str | None, str | None]] = []
+    for module, version in versioned_modules:
+        if skip_version:
+            version, tag = None, None
+        elif version is None:
+            version, tag = ask_version(module, repo.compatible_versions(module))
+        elif version == "latest":
+            version = repo.external.modules[module].get("latest")
+            if version is None:
+                raise InvalidVersionsError((module, "latest"))
+            tag = repo.external.modules[module]["versions"][version]["tag"]
+        else:
+            tag = repo.external.modules[module]["versions"][version]["tag"]
 
-            if invalid_versions := {
-                (m, v)
-                for m, v in modules or []
-                if v is not None and v != "latest" and v not in repo.external.modules[m]["versions"]
-            }:
-                raise InvalidVersionError(*invalid_versions.pop())
+        result.append((module, version, tag))
 
-            modules_: list[tuple[str, None, str | None]] | list[tuple[str, None, None]] | list[tuple[str, str, str]]
-            if modules:
-                modules_ = [(m, None, v) for m, v in modules]
-            else:
-                modules_ = ask_modules(valid_modules)
-
-            for idx, module in enumerate(modules_):
-                match module:
-                    case _ if ignore_branch:
-                        pass
-                    case (m, None, None):
-                        modules_[idx] = ask_version(m, repo.compatible_versions(m))  # type: ignore[assignment]
-                    case (m, None, "latest"):
-                        version = repo.external.modules[m].get("latest")
-                        if version is None:
-                            raise InvalidVersionError(m, "latest")
-                        tag = repo.external.modules[m]["versions"][version]["tag"]
-                        modules_[idx] = (m, tag, version)
-                    case (m, None, v):
-                        tag = repo.external.modules[m]["versions"][v]["tag"]
-                        modules_[idx] = (m, tag, v)
-
-            return func(repo, modules_, **kwargs)
-
-        return inner
-
-    return wrapper
+    return result
 
 
 def initialize_project(
@@ -295,8 +283,8 @@ def initialize_project(
     update_example_config(path)
 
     repo = Repo.init(str(path))
-
-    repo.index.add(
+    index = repo.index
+    index.add(
         [
             path / "modules" / "__init__.py",
             path / "modules" / "requirements.txt",
@@ -308,32 +296,128 @@ def initialize_project(
             path / ".gitignore",
         ],
     )
-    repo.index.write()
-    repo.index.commit("feat(cellophane): Initial commit from cellophane 🎉")
+    index.write()
+    index.commit("feat(cellophane): Initial commit from cellophane 🎉")
 
     return ProjectRepo(path, modules_repo_url, modules_repo_branch)
 
 
-def add_or_update_modules_remote(repo: ProjectRepo) -> Remote:
-    """Add or update the modules remote for a project repository.
+def drop_local_commits(
+    repo: ProjectRepo,
+    index: IndexFile,
+    module_: str,
+    logger: logging.LoggerAdapter,
+) -> list[Literal["add", "update", "rm"]]:
+    """Recompute the action to take based on local commits for a module.
+
+    Remove all commits for the module not yet in upstream and recompute the action
+    to take based on the module's current state. Detects no-op cases where the module
+    remains the same as the last commit in upstream.
+
+    Examples:
+        The module was added and now removed
+            -> No-op.
+        The module was added and now updated
+            -> Add with the new version.
+        The module was removed and now added with the same version
+            -> No-op
+        The module was removed and now added with a different version
+            -> Update with the new version
 
     Args:
     ----
         repo (ProjectRepo): The project repository.
+        index (IndexFile): The index file for the repository.
+        action (Literal["add", "update", "rm"]): The action to take.
+        module_ (str): The name of the module.
+        version (str): The version of the module.
+        logger (logging.LoggerAdapter): The logger instance.
 
     Returns:
     -------
-        Remote: The remote object for the modules repository.
-
+        Literal["add", "update", "rm"] | None: The recomputed action to take (or None for no-op).
     """
+    previous_actions: list[Literal["add", "update", "rm"]] = []
     try:
-        remote = repo.create_remote("modules", repo.external.url)
-    except GitCommandError as exc:
-        # Remote already exists
-        if exc.status == 3:
-            remote = repo.remotes["modules"]
-            remote.set_url(repo.external.url)
+        for commit in repo.module_commits(module_, local_only=True):
+            current_head = repo.head.commit
+            # Remove all commits for the module not yet in upstream
+            repo.git.rebase(f"--onto={commit.hexsha}^", commit.hexsha)
+            previous_actions.append(commit.trailers_dict["CellophaneModuleAction"][0])  # type: ignore[arg-type]
+    except Exception as exc:
+        # Revert to previous state if rebase fails
+        logger.warning(f"Unable to remove previous commit '{commit.hexsha[:6]}' for '{module_}': {exc!r}")
+        with suppress(GitCommandError):
+            repo.git.rebase("--abort")
+        index.reset(current_head, index=True, working_tree=True)
 
-    remote.fetch()
+    return previous_actions
 
-    return remote
+
+def rewrite_action(
+    index: IndexFile,
+    path: Path,
+    previous_actions: list[Literal["add", "update", "rm"]],
+    action: Literal["add", "update", "rm"],
+) -> Literal["add", "update", "rm"] | None:
+    """Rewrite the action to take based on the module's current state.
+
+    Detects no-op cases where the module remains the same as HEAD.
+
+    Args:
+    ----
+        index (IndexFile): The index file for the repository.
+        module_path (Path): The path to the module.
+        previous_commits (list[Commit]): The list of previous commits for the module.
+        action (Literal["add", "update", "rm"]): The current requested action.
+
+    Returns:
+    -------
+        Literal["add", "update", "rm"] | None: The recomputed action to take (or None for no-op).
+    """
+    # No changes compared to HEAD
+    if previous_actions and not index.diff("HEAD", paths=path):
+        return None
+    # All commits for the module not yet in upstream were removed
+    elif "add" in previous_actions and action == "update":
+        # Change action to add as module was added and now updated
+        return "add"
+    elif "rm" in previous_actions and action == "add":
+        # Check if module version changed between removal and addition
+        # If version changed, change action to update
+        # Otherwise, no-op as module was removed and now added
+        return "update"
+
+    return action
+
+
+def commit_module_changes(
+    index: IndexFile,
+    module_: str,
+    action: Literal["add", "update", "rm"],
+    msg: str,
+) -> None:
+    """Commit changes to a module in the project repository.
+
+    Args:
+    ----
+        index (IndexFile): The index file for the repository.
+        module_ (str): The name of the module.
+        action (Literal["add", "update", "rm"]): The action performed on the module.
+        version (str): The version of the module.
+        add_paths (Sequence[str]): The paths to add to the commit.
+        logger (logging.LoggerAdapter): The logger instance.
+    """
+
+    index.add("config.example.yaml")
+    index.add("modules/requirements.txt")
+    index.write()
+
+    _msg = f"""
+        chore(cellophane): {msg}
+
+
+        CellophaneModule: {module_}
+        CellophaneModuleAction: {action}
+    """
+    index.commit(dedent(_msg).strip())

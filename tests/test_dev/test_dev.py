@@ -1,84 +1,17 @@
 """Tests for the cellophane.__main__ module."""
 
-# pylint: disable=protected-access,redefined-outer-name
-
 from os import chdir
 from pathlib import Path
-from shutil import copytree, rmtree
-from typing import Iterator
+from typing import Any
 from unittest.mock import MagicMock
 
 from cellophane import dev
 from cellophane.testing import literal
 from click.testing import CliRunner
-from git import Repo
 from pytest import LogCaptureFixture, TempPathFactory, fixture, mark, param, raises
 from pytest_mock import MockerFixture
 
-
-@fixture(scope="session")
-def session_modules_repo(
-    tmp_path_factory: TempPathFactory,
-) -> Iterator[dev.ModulesRepo]:
-    """Create a dummy modules repository."""
-    path = tmp_path_factory.mktemp("modules_repo")
-    Repo.init(path)
-    repo = dev.ModulesRepo(path)
-    repo.create_remote("origin", url=str(path))
-    copytree(Path(__file__).parent / "repo", path, dirs_exist_ok=True)
-    repo.index.add("**")
-    repo.index.commit("Initial commit")
-    repo.create_tag("a/1.0.0")
-    repo.create_tag("b/1.0.0")
-    repo.create_tag("c/1.0.0")
-    (path / "modules" / "a" / "A").write_text("2.0.0")
-    repo.index.add("**")
-    repo.index.commit("Dummy commit")
-    repo.create_tag("a/2.0.0")
-    repo.create_head("dev")
-
-    repo.remote("origin").push("master")
-    repo.remote("origin").push("dev")
-
-    yield repo
-    rmtree(path)
-
-
-@fixture(scope="function")
-def modules_repo(
-    session_modules_repo: dev.ModulesRepo,
-    mocker: MockerFixture,
-) -> Iterator[dev.ModulesRepo]:
-    """Create a dummy modules repository."""
-    mocker.patch(
-        "cellophane.dev.ModulesRepo.from_url", return_value=session_modules_repo
-    )
-    yield session_modules_repo
-
-
-@fixture(scope="function")
-def project_repo(
-    tmp_path_factory: TempPathFactory,
-    modules_repo: dev.ModulesRepo,
-) -> Iterator[dev.ProjectRepo]:
-    """Create a dummy cellophane repository."""
-
-    local_path = tmp_path_factory.mktemp("local")
-    remote_path = tmp_path_factory.mktemp("remote")
-    _pwd = Path(".").absolute()
-    chdir(local_path)
-
-    Repo.init(remote_path, bare=True)
-    repo = dev.initialize_project(
-        "DUMMY", local_path, str(modules_repo.working_dir), "main"
-    )
-    repo.create_remote("origin", url=f"file://{remote_path}")
-    repo.git.push("origin", "master", set_upstream=True)
-    yield repo
-
-    rmtree(local_path)
-    rmtree(remote_path)
-    chdir(_pwd)
+from .fixtures import *  # noqa: F403
 
 
 class Test_ProjectRepo:
@@ -100,9 +33,7 @@ class Test_ProjectRepo:
     def test_initialize_exception_file_exists(project_repo: dev.ProjectRepo) -> None:
         """Test cellophane repository initialization with existing file."""
         with raises(FileExistsError):
-            dev.initialize_project(
-                "DUMMY", Path(project_repo.working_dir), "DUMMY", "main"
-            )
+            dev.initialize_project("DUMMY", Path(project_repo.working_dir), "DUMMY", "main")
 
     @staticmethod
     def test_invalid_repository(tmp_path: Path) -> None:
@@ -122,6 +53,21 @@ class Test_ModulesRepo:
     def test_from_url(modules_repo: dev.ModulesRepo) -> None:
         """Test modules repository initialization from URL."""
         assert modules_repo
+
+    @staticmethod
+    def test_invalid_modules_json(modules_repo: dev.ModulesRepo) -> None:
+        """Test modules repository initialization from URL."""
+        repo = modules_repo
+        index = repo.index
+        local_path = Path(modules_repo.working_dir)
+        (local_path / "modules.json").write_text("INVALID")
+
+        index.add("modules.json")
+        index.commit("Invalid modules.json")
+        index.write()
+        repo.remote("origin").push("master")
+        with raises(dev.InvalidModulesRepoError):
+            repo.modules
 
     @staticmethod
     def test_invalid_remote_url() -> None:
@@ -190,7 +136,7 @@ class Test_ask_modules_branch:
         mocker.patch("cellophane.dev.util.select", return_value=_select_mock)
         assert dev.ask_version(
             [*modules_repo.modules.keys()][0],
-            valid=[("foo/1.33.7", "1.33.7")],
+            valid_versions=[("foo/1.33.7", "1.33.7")],
         )
         assert _select_mock.ask.call_count == 1
 
@@ -213,7 +159,7 @@ class Test_module_cli:
         """Test module CLI with invalid project repository."""
         chdir(tmp_path)
         result = self.runner.invoke(dev.main, "module add")
-        assert caplog.messages == literal("Invalid cellophane repository")
+        assert "Invalid cellophane project repository '.'" in result.stdout
         assert result.exit_code == 1
 
     def test_invalid_modules_repo(
@@ -228,7 +174,7 @@ class Test_module_cli:
             side_effect=dev.InvalidModulesRepoError("INVALID"),
         )
         result = self.runner.invoke(dev.main, "--modules-repo INVALID module add")
-        assert caplog.messages == literal("Invalid modules repository")
+        assert "Invalid cellophane modules repository 'INVALID'" in result.stdout
         assert result.exit_code == 1
 
     def test_dirty_repo(
@@ -243,6 +189,26 @@ class Test_module_cli:
         assert caplog.messages == literal("Repository has uncommited changes")
         assert result.exit_code == 1
 
+    def test_no_module_selected(self, project_repo: dev.ProjectRepo, mocker: MockerFixture) -> None:
+        mocker.patch("questionary.question.Question.ask", return_value=None)
+        original_head = project_repo.head.commit
+        result = self.runner.invoke(dev.main, "module add")
+        assert "No modules selected" in result.stdout
+        assert project_repo.head.commit == original_head
+
+    def test_no_version_selected(self, project_repo: dev.ProjectRepo, mocker: MockerFixture) -> None:
+        mocker.patch("questionary.question.Question.ask", return_value=None)
+        original_head = project_repo.head.commit
+        result = self.runner.invoke(dev.main, "module add a")
+        assert "No version selected" in result.stdout
+        assert project_repo.head.commit == original_head
+
+    def test_unhandled_exception(self, project_repo: dev.ProjectRepo, mocker: MockerFixture) -> None:
+        mocker.patch("cellophane.dev.cli.module_action", side_effect=Exception("DUMMY"))
+        result = self.runner.invoke(dev.main, "module add a@1.0.0")
+        assert "Unhandled Exception: Exception('DUMMY')" in result.stdout
+        assert result.exit_code == 1
+
     def test_add(
         self,
         project_repo: dev.ProjectRepo,
@@ -250,24 +216,32 @@ class Test_module_cli:
         caplog: LogCaptureFixture,
     ) -> None:
         """Test module add."""
-        self.runner.invoke(dev.main, "module add a@1.0.0")
-        assert "feat(cellophane): Added 'a@1.0.0'" in project_repo.head.commit.message
+        repo = project_repo
+        result = self.runner.invoke(dev.main, "module add a@1.0.0")
+        assert "chore(cellophane): Add module a@1.0.0" in repo.head.commit.message, result.stdout
 
-        previous_head = project_repo.head.commit
-        self.runner.invoke(dev.main, "module add a@1.0.0")
-        assert caplog.messages == literal("Module 'a' is not valid")
-        assert previous_head == project_repo.head.commit
+        previous_head = repo.head.commit
+        result = self.runner.invoke(dev.main, "module add a@1.0.0")
+        assert "Module 'a' is not valid" in result.stdout, result.exception
+        assert previous_head == repo.head.commit
 
         original_head = project_repo.head.commit
-        mocker.patch(
-            "cellophane.dev.cli.update_example_config", side_effect=Exception("DUMMY")
-        )
-        self.runner.invoke(dev.main, "module add b@1.0.0")
-        assert caplog.messages == literal("Unable to add 'b@1.0.0': Exception('DUMMY')")
+        mock = mocker.patch("cellophane.dev.cli.update_example_config", side_effect=Exception("DUMMY"))
+        result = self.runner.invoke(dev.main, "module add b@1.0.0")
+        assert "Add module b@1.0.0 failed: Exception('DUMMY')" in result.stdout
         assert original_head == project_repo.head.commit
+        mocker.stop(mock)
 
         self.runner.invoke(dev.main, "module add c")
         assert caplog.messages == literal("No compatible versions for module 'c'")
+
+        result = self.runner.invoke(dev.main, "module add c@latest")
+        assert "Version 'latest' is invalid for module 'c'" in result.stdout
+
+        mocker.patch("questionary.question.Question.ask", return_value=("2.0.0", "d/2.0.0"))
+        result = self.runner.invoke(dev.main, "module add d")
+        assert "Add module d@2.0.0" in result.stdout
+        assert "chore(cellophane): Add module d@2.0.0" in repo.head.commit.message
 
     def test_update(
         self,
@@ -277,26 +251,25 @@ class Test_module_cli:
     ) -> None:
         """Test module update."""
         self.runner.invoke(dev.main, "module add a@1.0.0")
-        project_repo.remote("origin").push()
+        repo.remote("origin").push()
+        original_head = repo.head.commit
 
-        self.runner.invoke(dev.main, "module update a@dev")
-        assert "chore(cellophane): Updated 'a->dev'" in project_repo.head.commit.message
+        result = self.runner.invoke(dev.main, "module update a@dev")
+        assert "chore(cellophane): Update module a->dev" in repo.head.commit.message, result.stdout
 
-        self.runner.invoke(dev.main, "module update a@latest")
-        assert "chore(cellophane): Updated 'a->2.0.0'" in project_repo.head.commit.message
+        result = self.runner.invoke(dev.main, "module update a@latest")
+        assert "chore(cellophane): Update module a->2.0.0" in repo.head.commit.message, result.stdout
 
-        self.runner.invoke(dev.main, "module update a@1.0.0")
-        assert "chore(cellophane): Updated 'a->1.0.0'" in project_repo.head.commit.message
+        result = self.runner.invoke(dev.main, "module update a@1.0.0")
+        assert repo.head.commit == original_head, repo.git.log()
 
-        self.runner.invoke(dev.main, "module update a@INVALID")
-        assert caplog.messages == literal("Version 'INVALID' is invalid for 'a'")
+        result = self.runner.invoke(dev.main, "module update a@INVALID")
+        assert result.stdout == literal("Version 'INVALID' is invalid for module 'a'")
 
         original_head = project_repo.head.commit
-        mocker.patch(
-            "cellophane.dev.cli.update_example_config", side_effect=Exception("DUMMY")
-        )
-        self.runner.invoke(dev.main, "module update a@dev")
-        assert caplog.messages == literal("Unable to update 'a->dev': Exception('DUMMY')")
+        mocker.patch("cellophane.dev.cli.update_example_config", side_effect=Exception("DUMMY"))
+        result = self.runner.invoke(dev.main, "module update a@dev")
+        assert "Update module a->dev failed: Exception('DUMMY')" in result.stdout
         assert original_head == project_repo.head.commit
 
     def test_rm(
@@ -306,24 +279,23 @@ class Test_module_cli:
         caplog: LogCaptureFixture,
     ) -> None:
         """Test module rm."""
-        self.runner.invoke(dev.main, "module add a@1.0.0 b@1.0.0")
-        project_repo.remote("origin").push()
+        repo = project_repo
+        result = self.runner.invoke(dev.main, "module add a@1.0.0 b@1.0.0")
+        repo.remote("origin").push()
 
         self.runner.invoke(dev.main, "module rm a")
-        assert "feat(cellophane): Removed 'a'" in project_repo.head.commit.message
+        assert "chore(cellophane): Remove module a" in repo.head.commit.message
 
         previous_head = project_repo.head.commit
         self.runner.invoke(dev.main, "module rm a")
         assert caplog.messages == literal("Module 'a' is not valid")
         assert previous_head == project_repo.head.commit
 
-        previous_head = project_repo.head.commit
-        mock = mocker.patch(
-            "cellophane.dev.cli.update_example_config", side_effect=Exception("DUMMY")
-        )
-        self.runner.invoke(dev.main, "module rm b")
-        assert caplog.messages == literal("Unable to remove 'b': Exception('DUMMY')")
-        assert previous_head == project_repo.head.commit
+        previous_head = repo.head.commit
+        mock = mocker.patch("cellophane.dev.cli.update_example_config", side_effect=Exception("DUMMY"))
+        result = self.runner.invoke(dev.main, "module rm b")
+        assert "Remove module b failed: Exception('DUMMY')" in result.stdout
+        assert previous_head == repo.head.commit
         mocker.stop(mock)
 
         self.runner.invoke(dev.main, "module rm b")
@@ -331,6 +303,131 @@ class Test_module_cli:
         self.runner.invoke(dev.main, "module rm")
         assert caplog.messages == literal("No modules to select from")
         assert previous_head == project_repo.head.commit
+
+    def test_action_rewrite_add_rm(
+        self,
+        project_repo: dev.ProjectRepo,
+    ) -> None:
+        repo = project_repo
+
+        # If a module is added and removed, the add commit should be removed.
+        original_head = repo.head.commit
+        add_result = self.runner.invoke(dev.main, "module add a@1.0.0")
+        rm_result = self.runner.invoke(dev.main, "module rm a")
+        assert add_result.exit_code == 0, add_result.stdout
+        assert rm_result.exit_code == 0, add_result.stdout
+        assert repo.head.commit == original_head
+
+    def test_action_rewrite_rm_add(
+        self,
+        project_repo: dev.ProjectRepo,
+    ) -> None:
+        repo = project_repo
+
+        # If a module is added and removed, the add commit should be removed.
+        self.runner.invoke(dev.main, "module add a@1.0.0")
+        project_repo.remote("origin").push()
+        original_head = repo.head.commit
+
+        rm_result = self.runner.invoke(dev.main, "module rm a")
+        add_result = self.runner.invoke(dev.main, "module add a@1.0.0")
+
+        assert rm_result.exit_code == 0, rm_result.stdout
+        assert add_result.exit_code == 0, add_result.stdout
+        assert repo.head.commit == original_head, add_result.stdout
+
+        rm_result = self.runner.invoke(dev.main, "module rm a")
+        add_result = self.runner.invoke(dev.main, "module add a@2.0.0")
+
+        assert rm_result.exit_code == 0, rm_result.stdout
+        assert add_result.exit_code == 0, add_result.stdout
+        assert "chore(cellophane): Update module a->2.0.0" in repo.head.commit.message
+
+    def test_action_rewrite_add_update(
+        self,
+        project_repo: dev.ProjectRepo,
+    ) -> None:
+        repo = project_repo
+        # If module is added and updated, the add commit is removed and the
+        # update commit is changed to an add commit with the new version.
+        add_result = self.runner.invoke(dev.main, "module add a@1.0.0")
+        add_commit = repo.head.commit
+        updade_result = self.runner.invoke(dev.main, "module update a@dev")
+        updade_commit = repo.head.commit
+        all_commits = [*repo.iter_commits()]
+        assert add_result.exit_code == 0, add_result.stdout
+        assert updade_result.exit_code == 0, updade_result.stdout
+        assert add_commit not in all_commits
+        assert updade_commit in all_commits
+
+    def test_action_rewrite_update_update(
+        self,
+        project_repo: dev.ProjectRepo,
+        modules_repo: dev.ModulesRepo,
+    ) -> None:
+        repo = project_repo
+
+        self.runner.invoke(dev.main, "module add a@1.0.0")
+        project_repo.remote("origin").push()
+        update_result_1 = self.runner.invoke(dev.main, "module update a@dev")
+        update_head_1 = repo.head.commit
+
+        # If a module is updated twice, the first update commit should be removed
+        (Path(modules_repo.working_dir) / "modules" / "a" / "A").write_text("UPDATED")
+        modules_repo.heads["dev"].checkout()
+        modules_repo.index.add("modules/a/A")
+        modules_repo.index.write()
+        modules_repo.index.commit("Update module a")
+        modules_repo.remote("origin").push("dev")
+
+        update_result_2 = self.runner.invoke(dev.main, "module update a@dev")
+        update_head_2 = repo.head.commit
+
+        assert update_result_1.exit_code == 0, update_result_1.stdout
+        assert update_result_2.exit_code == 0, update_result_2.stdout
+
+        all_commits = [*repo.iter_commits()]
+        assert update_head_1 not in all_commits, repo.git.log()
+        assert "chore(cellophane): Update module a->dev" in update_head_2.message
+
+    def test_action_rewrite_abort(
+        self,
+        project_repo: dev.ProjectRepo,
+        mocker: MockerFixture,
+    ) -> None:
+        repo = project_repo
+
+        class ProjectRepoMock(dev.ProjectRepo):
+            def __init__(self, *args: Any, **kwargs: Any) -> None:
+                super().__init__(*args, **kwargs)
+                self.git_orig = self.git
+                self.git = MagicMock(wraps=self.git_orig)
+                self.git.rebase = self._rebase
+
+            def _rebase(self, *args: Any, **kwargs: Any) -> Any:
+                if "--onto" in args[0]:
+                    raise Exception("DUMMY")
+                else:
+                    return self.git_orig.rebase(*args, **kwargs)
+
+        mocker.patch("cellophane.dev.cli.ProjectRepo", ProjectRepoMock)
+
+        original_head = repo.head.commit
+        result_1 = self.runner.invoke(dev.main, "module add a@1.0.0")
+        commit_1 = repo.head.commit
+        result_2 = self.runner.invoke(dev.main, "module update a@dev")
+        commit_2 = repo.head.commit
+
+        all_commits = [*repo.iter_commits()]
+
+        assert result_1.exit_code == 0, result_1.stdout
+        assert result_2.exit_code == 0, result_2.stdout
+        assert commit_1 != original_head, repo.git.log()
+        assert commit_2 != commit_1, repo.git.log()
+
+        assert original_head in all_commits
+        assert commit_1 in all_commits
+        assert commit_2 in all_commits
 
 
 class Test_cli_init:
@@ -361,16 +458,18 @@ class Test_cli_init:
         project_path: Path,
         command: str,
         exit_code: int,
+        modules_repo: dev.ModulesRepo,
     ) -> None:
         """Test cellophane CLI for initializing a new project."""
         chdir(project_path)
-        result = self.runner.invoke(dev.main, command)
-        assert result.exit_code == exit_code
+        result = self.runner.invoke(dev.main, f"--modules-repo {modules_repo.working_dir} {command}")
+        assert result.exit_code == exit_code, result.stdout
 
     def test_init_cli_unhandled_exception(
         self,
         tmp_path: Path,
         mocker: MockerFixture,
+        modules_repo: dev.ModulesRepo,
     ) -> None:
         """Test exception handling in cellophane CLI for initializing a new project."""
         mocker.patch(
@@ -378,5 +477,5 @@ class Test_cli_init:
             side_effect=Exception("DUMMY"),
         )
         chdir(tmp_path)
-        result = self.runner.invoke(dev.main, "init DUMMY")
+        result = self.runner.invoke(dev.main, f"--modules-repo {modules_repo.working_dir} init DUMMY")
         assert result.exit_code == 1

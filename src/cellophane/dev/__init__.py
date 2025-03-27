@@ -2,10 +2,10 @@
 
 from .cli import main
 from .exceptions import (
-    InvalidModuleError,
+    InvalidModulesError,
     InvalidModulesRepoError,
     InvalidProjectRepoError,
-    InvalidVersionError,
+    InvalidVersionsError,
     NoModulesError,
     NoVersionsError,
 )
@@ -28,10 +28,10 @@ __all__ = [
     "update_example_config",
     "ModulesRepo",
     "ProjectRepo",
-    "InvalidModuleError",
+    "InvalidModulesError",
     "InvalidModulesRepoError",
     "InvalidProjectRepoError",
-    "InvalidVersionError",
+    "InvalidVersionsError",
     "NoModulesError",
     "NoVersionsError",
     "main",

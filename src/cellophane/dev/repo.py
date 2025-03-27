@@ -5,15 +5,18 @@ import re
 from functools import cached_property
 from pathlib import Path
 from tempfile import mkdtemp
-from typing import Any
+from typing import Any, Iterator
 
-from git import GitCommandError, InvalidGitRepositoryError, Repo
+from git import Commit, GitCommandError, InvalidGitRepositoryError, Repo
 from packaging.version import Version as PyPIVersion
 from semver import Version
 
 from cellophane import CELLOPHANE_VERSION
 
-from .exceptions import InvalidModulesRepoError, InvalidProjectRepoError
+from .exceptions import (
+    InvalidModulesRepoError,
+    InvalidProjectRepoError,
+)
 
 
 class ModulesRepo(Repo):
@@ -106,9 +109,9 @@ class ModulesRepo(Repo):
         """
         try:
             json_ = self.git.show(f"origin/{self.active_branch.name}:modules.json")
-        except GitCommandError as exc:
+            return json.loads(json_)
+        except (GitCommandError, json.JSONDecodeError) as exc:
             raise InvalidModulesRepoError(self.url, msg="Could not parse modules.json") from exc
-        return json.loads(json_)
 
     @property
     def url(self) -> str:
@@ -168,6 +171,32 @@ class ProjectRepo(Repo):
             url=modules_repo_url,
             branch=modules_repo_branch,
         )
+
+        try:
+            remote = self.create_remote("modules", self.external.url)
+        except GitCommandError as exc:
+            if exc.status != 3:
+                raise exc
+            remote = self.remotes["modules"]
+            remote.set_url(self.external.url)
+        finally:
+            remote.fetch()
+
+    def module_commits(self, module_: str, local_only: bool = False) -> Iterator[Commit]:
+        """Retrieves the commit associated with the specified module."""
+        for commit in self.iter_commits("@{upstream}.." if local_only else None):
+            if (
+                (
+                    isinstance(commit.message, str)
+                    and commit.message.startswith("chore(cellophane):")
+                    or isinstance(commit.message, bytes)
+                    and commit.message.startswith(b"chore(cellophane):")
+                )
+                and "CellophaneModule" in commit.trailers_dict
+                and "CellophaneModuleAction" in commit.trailers_dict
+                and commit.trailers_dict["CellophaneModule"][0] == module_
+            ):
+                yield commit
 
     @property
     def modules(self) -> set[str]:

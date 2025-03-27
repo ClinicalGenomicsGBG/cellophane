@@ -55,7 +55,7 @@ def cellophane(label: str, root: Path) -> click.Command:
     click.rich_click.REQUIRED_LONG_STRING = "(REQUIRED)"
     click.rich_click.DEFAULT_STRING = "{}"
     click.rich_click.STYLE_OPTION_DEFAULT = "green"
-    external_filter = ExternalFilter((CELLOPHANE_ROOT, root))
+    external_filter = ExternalFilter((CELLOPHANE_ROOT, root / "modules"))
     console_handler = setup_console_handler(filters=(external_filter,))
     logger = LoggerAdapter(getLogger(), {"label": label})
 

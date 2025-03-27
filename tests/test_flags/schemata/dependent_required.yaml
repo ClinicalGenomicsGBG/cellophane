@@ -1,0 +1,37 @@
+schema:
+  properties:
+    a: {type: boolean}
+    b: {type: null}
+    c: {type: boolean}
+    d: {type: null}
+  dependentRequired:
+    a: [b]
+    c: [d]
+
+
+expected:
+    - config: {}
+      flags:
+      - {key: ["a"], type: boolean}
+      - {key: ["b"], required: false}
+      - {key: ["c"], type: boolean}
+      - {key: ["d"], required: false}
+    - config: {a: true}
+      flags:
+      - {key: ["a"], type: boolean, value: true}
+      - {key: ["b"], required: true}
+      - {key: ["c"], type: boolean}
+      - {key: ["d"], required: false}
+    - config: {c: true}
+      flags:
+      - {key: ["a"], type: boolean}
+      - {key: ["b"], required: false}
+      - {key: ["c"], type: boolean, value: true}
+      - {key: ["d"], required: true}
+    - config: {a: true, c: true}
+      flags:
+      - {key: ["a"], type: boolean, value: true}
+      - {key: ["b"], required: true}
+      - {key: ["c"], type: boolean, value: true}
+      - {key: ["d"], required: true}
+

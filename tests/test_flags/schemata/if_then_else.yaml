@@ -1,0 +1,33 @@
+schema:
+  properties:
+    a: {type: boolean}
+    b:
+      type: object
+      required: [x]
+      properties:
+        x: {type: null}
+        y: {type: null}
+  if:
+    required: [a]
+    properties: {a: {const: true}}
+  then:
+    required: [b]
+  else:
+    required: [a]
+
+expected:
+  - config: null
+    flags:
+    - {key: [a], type: boolean}
+    - {key: [b, x], required: false}
+    - {key: [b, y], required: false}
+  - config: {}
+    flags:
+    - {key: [a], type: boolean, required: true}
+    - {key: [b, x], required: false}
+    - {key: [b, y], required: false}
+  - config: {a: true}
+    flags:
+    - {key: [a], type: boolean, required: false, value: true}
+    - {key: [b, x], required: true}
+    - {key: [b, y], required: false}

@@ -1,0 +1,8 @@
+schema:
+  properties:
+    no_default:
+      type: string
+
+expected: |
+  # # [string]
+  # no_default: ~

@@ -1,1 +1,1 @@
-pytest_plugins = "cellophane.testing"
+pytest_plugins = ["cellophane.testing"]

@@ -6,22 +6,24 @@ from typing import Any
 from git import InvalidGitRepositoryError
 
 
-class InvalidModuleError(Exception):
+class InvalidModulesError(Exception):
     """Exception raised when a module is not valid.
 
     Args:
     ----
-        _module (str): The name of the module.
+        _module (str | tuple[str]): The names of the module.
         msg (str | None): The error message (default: None).
 
     """
 
-    def __init__(self, _module: str, msg: str | None = None):
-        self.module = _module
-        super().__init__(msg or f"Module '{_module}' is not valid")
+    def __init__(self, modules: str | list[str], msg: str | None = None):
+        _modules = modules if isinstance(modules, list) else [modules]
+        self.modules = _modules
+        _msg = "\n".join(f"Module '{module}' is not valid" for module in _modules)
+        super().__init__(msg or _msg)
 
 
-class InvalidVersionError(Exception):
+class InvalidVersionsError(Exception):
     """Exception raised when a module is not valid.
 
     Args:
@@ -32,15 +34,13 @@ class InvalidVersionError(Exception):
 
     """
 
-    def __init__(
-        self,
-        _module: str,
-        branch: str | None,
-        msg: str | None = None,
-    ) -> None:
-        self.module = _module
-        self.branch = branch
-        super().__init__(msg or f"Version '{branch}' is invalid for '{_module}'")
+    def __init__(self, versioned_modules: tuple[str, str] | list[tuple[str, str]]) -> None:
+        _versioned_modules = versioned_modules if isinstance(versioned_modules, list) else [versioned_modules]
+        self.modules = _versioned_modules
+        _msg = "\n".join(
+            f"Version '{version}' is invalid for module '{module}'" for module, version in _versioned_modules
+        )
+        super().__init__(_msg)
 
 
 class NoModulesError(Exception):
@@ -77,7 +77,7 @@ class InvalidModulesRepoError(InvalidGitRepositoryError):
         **kwargs: Any,
     ) -> None:
         super().__init__(
-            msg or f"Invalid modules repository ({url})",
+            msg or f"Invalid cellophane modules repository '{url}'",
             *args,
             **kwargs,
         )
@@ -103,7 +103,7 @@ class InvalidProjectRepoError(InvalidGitRepositoryError):
         **kwargs: Any,
     ):
         super().__init__(
-            msg or f"Invalid cellophane repository ({path})",
+            msg or f"Invalid cellophane project repository '{path}'",
             *args,
             **kwargs,
         )

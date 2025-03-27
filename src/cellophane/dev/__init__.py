@@ -2,36 +2,34 @@
 
 from .cli import main
 from .exceptions import (
-    InvalidModuleError,
+    InvalidModulesError,
     InvalidModulesRepoError,
     InvalidProjectRepoError,
-    InvalidVersionError,
+    InvalidVersionsError,
     NoModulesError,
     NoVersionsError,
 )
 from .repo import ModulesRepo, ProjectRepo
 from .util import (
-    add_requirements,
     ask_modules,
     ask_version,
     initialize_project,
-    remove_requirements,
+    update_requirements,
     update_example_config,
 )
 
 __all__ = [
-    "add_requirements",
     "ask_modules",
     "ask_version",
     "initialize_project",
-    "remove_requirements",
     "update_example_config",
+    "update_requirements",
     "ModulesRepo",
     "ProjectRepo",
-    "InvalidModuleError",
+    "InvalidModulesError",
     "InvalidModulesRepoError",
     "InvalidProjectRepoError",
-    "InvalidVersionError",
+    "InvalidVersionsError",
     "NoModulesError",
     "NoVersionsError",
     "main",

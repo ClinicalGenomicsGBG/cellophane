@@ -2,28 +2,29 @@
 
 import logging
 from pathlib import Path
-from typing import Any, Literal
+from typing import Literal
 
 import rich_click as click
 
 from cellophane import logs
 
 from .exceptions import (
-    InvalidModuleError,
+    InvalidModulesError,
     InvalidModulesRepoError,
     InvalidProjectRepoError,
-    InvalidVersionError,
+    InvalidVersionsError,
     NoModulesError,
     NoVersionsError,
 )
 from .repo import ProjectRepo
 from .util import (
-    add_or_update_modules_remote,
-    add_requirements,
+    add_version_tags,
+    commit_changes,
+    drop_local_commits,
     initialize_project,
-    remove_requirements,
+    rewrite_action,
     update_example_config,
-    with_modules,
+    update_requirements,
 )
 
 
@@ -126,30 +127,12 @@ def module(
         raise SystemExit(1)
 
     try:
-        common_kwargs = {
-            "modules": modules,
-            "repo": _repo,
-            "path": _path,
-            "logger": _logger,
-        }
-
-        add_or_update_modules_remote(_repo)
-
-        match command:
-            case "add":
-                add(**common_kwargs, valid_modules=_repo.absent_modules)
-            case "rm":
-                rm(**common_kwargs, valid_modules=_repo.modules)
-            case "update":
-                update(**common_kwargs, valid_modules=_repo.modules)
-
+        # add_or_update_modules_remote(_repo)
+        module_action(repo=_repo, action=command, modules=modules, path=_path, logger=_logger)
     except NoModulesError as exc:
         _logger.warning(exc)
         raise SystemExit(1) from exc
-    except (InvalidModuleError, InvalidVersionError, NoVersionsError) as exc:
-        _logger.critical(exc)
-        raise SystemExit(1) from exc
-    except InvalidModulesRepoError as exc:
+    except (InvalidModulesError, InvalidVersionsError, NoVersionsError) as exc:
         _logger.critical(exc)
         raise SystemExit(1) from exc
     except Exception as exc:
@@ -160,103 +143,116 @@ def module(
         raise SystemExit(1) from exc
 
 
-@with_modules()
-def add(
+def module_action(
     repo: ProjectRepo,
-    modules: list[tuple[str, str, str]],
+    action: Literal["add", "update", "rm"],
+    modules: list[tuple[str, str]] | list[tuple[str, None]] | None,
     path: Path,
     logger: logging.LoggerAdapter,
 ) -> None:
-    """Add module(s)"""
-    for module_, ref, version in modules:
+    index = repo.index
+    versioned_tagged_modules = add_version_tags(
+        modules=modules,
+        valid_modules=repo.modules if action != "add" else repo.absent_modules,
+        repo=repo,
+        skip_version=action == "rm",
+    )
+    for module, version, tag in versioned_tagged_modules:
+        previous_head = repo.head.commit
+        msg = {
+            "add": f"Add module {module}@{version}",
+            "update": f"Update module {module}->{version}",
+            "rm": f"Remove module {module}",
+        }
         try:
-            ref_ = ref if ref in [r.name for r in repo.tags] else f"modules/{ref}"
-            repo.git.read_tree(
-                f"--prefix=modules/{module_}/",
-                "-u",
-                f"{ref_}:{repo.external.modules[module_]['path']}",
-            )
+            previous_commits = drop_local_commits(repo, index, logger, action="module", module=module)
+            module_dir_name = Path(repo.external.modules[module]["path"]).name
+            module_path = path / "modules" / module_dir_name
+            index.remove(module_path, working_tree=True, r=True, ignore_unmatch=True)
+
+            if action in ["add", "update"]:
+                # Append the module name to the tag if it is not a valid tag
+                _tag = tag if tag in [r.name for r in repo.tags] else f"modules/{tag}"
+                # Read the tree from the modules repository and add it to the 'modules' directory
+                repo.git.read_tree(f"--prefix=modules/{module_dir_name}/", "-u", f"{_tag}:{module_path}")
+
+            new_action = rewrite_action(index, module_path, previous_commits, action)
+
+            update_requirements(path)
             update_example_config(path)
-            add_requirements(path, module_)
-
-        except Exception as exc:  # pylint: disable=broad-except
-            logger.error(
-                f"Unable to add '{module_}@{version}': {exc!r}",
-                exc_info=True,
-            )
-            repo.head.reset("HEAD", index=True, working_tree=True)
-            continue
-        else:
-            repo.index.add("config.example.yaml")
-            repo.index.add("modules/requirements.txt")
-            repo.index.write()
-            repo.index.commit(f"feat(cellophane): Added '{module_}@{version}'")
-            logger.info(f"Added '{module_}@{version}'")
-
-
-@with_modules()
-def update(
-    repo: ProjectRepo,
-    modules: list[tuple[str, str, str]],
-    path: Path,
-    logger: logging.LoggerAdapter,
-    **kwargs: Any,
-) -> None:
-    """Update module(s)"""
-    del kwargs  # Unused
-
-    for module_, ref, version in modules:
-        try:
-            ref_ = ref if ref in [r.name for r in repo.tags] else f"modules/{ref}"
-            repo.index.remove(path / f"modules/{module_}", working_tree=True, r=True)
-            repo.git.read_tree(
-                f"--prefix=modules/{module_}/",
-                "-u",
-                f"{ref_}:{repo.external.modules[module_]['path']}",
-            )
-            update_example_config(path)
-            remove_requirements(path, module_)
-            add_requirements(path, module_)
-        except Exception as exc:  # pylint: disable=broad-except
-            logger.error(f"Unable to update '{module_}->{version}': {exc!r}", exc_info=True)
-            repo.head.reset("HEAD", index=True, working_tree=True)
-            continue
-        else:
-            repo.index.add("config.example.yaml")
-            repo.index.add("modules/requirements.txt")
-            repo.index.write()
-            repo.index.commit(f"chore(cellophane): Updated '{module_}->{version}'")
-            logger.info(f"Updated '{module_}->{version}'")
+            logger.info(msg[action])
+            if new_action is not None:
+                commit_changes(
+                    index=index,
+                    msg=msg[new_action],
+                    add_paths=[
+                        "modules/requirements.txt",
+                        "config.example.yaml",
+                        *([f"modules/{module_path.name}"] if new_action != "rm" else []),
+                    ],
+                    trailers={
+                        "CellophaneAction": "module",
+                        "CellophaneModule": module,
+                        "CellophaneModuleAction": new_action,
+                    },
+                )
+        except Exception as exc:
+            logger.error(f"{msg[action]} failed: {exc!r}", exc_info=True)
+            repo.head.reset(previous_head, index=True, working_tree=True)
+        finally:
+            index.update()
 
 
-@with_modules(ignore_branch=True)
-def rm(
-    repo: ProjectRepo,
-    modules: list[tuple[str, str, str]],
-    path: Path,
-    logger: logging.LoggerAdapter,
-    **kwargs: Any,
-) -> None:
-    """Remove module"""
-    del kwargs  # Unused
-
-    for module_, _, _ in modules:
-        try:
-            repo.index.remove(path / f"modules/{module_}", working_tree=True, r=True)
-            update_example_config(path)
-            remove_requirements(path, module_)
-        except Exception as exc:  # pylint: disable=broad-except
-            logger.error(f"Unable to remove '{module_}': {exc!r}", exc_info=True)
-            repo.head.reset("HEAD", index=True, working_tree=True)
-        else:
-            repo.index.add("config.example.yaml")
-            repo.index.add("modules/requirements.txt")
-            repo.index.write()
-            repo.index.commit(f"feat(cellophane): Removed '{module_}'")
-            logger.info(f"Removed '{module_}'")
+@main.group()
+def project() -> None:
+    """Manage project configurations"""
+    ...
 
 
-@main.command()
+@project.command()
+@click.pass_context
+def update(ctx: click.Context) -> None:
+    """Update project requirements and example configuration"""
+    logger: logging.LoggerAdapter = ctx.obj["logger"]
+    logger.info("Updating project requirements and example configuration")
+    try:
+        repo = ProjectRepo(
+            ctx.obj["path"],
+            ctx.obj["modules_repo_url"],
+            ctx.obj["modules_repo_branch"],
+        )
+    except (InvalidProjectRepoError, InvalidModulesRepoError) as exc:
+        logger.critical(exc, exc_info=True)
+        raise SystemExit(1) from exc
+
+    if repo.is_dirty():
+        logger.critical("Repository has uncommited changes")
+        raise SystemExit(1)
+
+    index = repo.index
+    previous_head = repo.head.commit
+    try:
+        drop_local_commits(repo, index, logger, action="update")
+        update_requirements(ctx.obj["path"])
+        update_example_config(ctx.obj["path"])
+        index.add(["modules/requirements.txt", "config.example.yaml"])
+        if not index.diff("HEAD", ["modules/requirements.txt", "config.example.yaml"]):
+            logger.info("No changes detected")
+            index.reset(previous_head, index=True, working_tree=True)
+            return
+        commit_changes(
+            index=index,
+            msg="Update requirements and example configuration",
+            add_paths=["modules/requirements.txt", "config.example.yaml"],
+            trailers={"CellophaneAction": "update"},
+        )
+    except Exception as exc:
+        logger.critical(f"Unhandled exception: {exc!r}", exc_info=True)
+        repo.head.reset(previous_head, index=True, working_tree=True)
+        raise SystemExit(1) from exc
+
+
+@project.command()
 @click.option(
     "--force",
     is_flag=True,

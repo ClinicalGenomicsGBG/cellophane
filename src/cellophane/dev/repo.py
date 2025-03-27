@@ -5,15 +5,18 @@ import re
 from functools import cached_property
 from pathlib import Path
 from tempfile import mkdtemp
-from typing import Any
+from typing import Any, Iterator
 
-from git import GitCommandError, InvalidGitRepositoryError, Repo
+from git import Commit, GitCommandError, InvalidGitRepositoryError, Repo
 from packaging.version import Version as PyPIVersion
 from semver import Version
 
 from cellophane import CELLOPHANE_VERSION
 
-from .exceptions import InvalidModulesRepoError, InvalidProjectRepoError
+from .exceptions import (
+    InvalidModulesRepoError,
+    InvalidProjectRepoError,
+)
 
 
 class ModulesRepo(Repo):
@@ -106,9 +109,9 @@ class ModulesRepo(Repo):
         """
         try:
             json_ = self.git.show(f"origin/{self.active_branch.name}:modules.json")
-        except GitCommandError as exc:
+            return json.loads(json_)
+        except (GitCommandError, json.JSONDecodeError) as exc:
             raise InvalidModulesRepoError(self.url, msg="Could not parse modules.json") from exc
-        return json.loads(json_)
 
     @property
     def url(self) -> str:
@@ -169,6 +172,48 @@ class ProjectRepo(Repo):
             branch=modules_repo_branch,
         )
 
+        try:
+            remote = self.create_remote("modules", self.external.url)
+        except GitCommandError as exc:
+            if exc.status != 3:
+                raise exc
+            remote = self.remotes["modules"]
+            remote.set_url(self.external.url)
+        finally:
+            remote.fetch()
+
+    def local_commits(
+        self,
+        module: str | None = None,
+        paths: Path | None = None,
+        action: str | None = None,
+    ) -> Iterator[Commit]:
+        """Retrieves the commit associated with the specified module."""
+        for commit in self.iter_commits("@{upstream}..", paths=paths):
+            # Check if the commit message is a cellophane commit
+            if commit.trailers_dict.get("CellophaneAction") is None or not (
+                isinstance(commit.message, str)
+                and commit.message.startswith("chore(cellophane):")
+                or isinstance(commit.message, bytes)
+                and commit.message.startswith(b"chore(cellophane):")
+            ):
+                continue
+
+            # Check if the specified action is in the commit message
+            if action is not None and (
+                commit.trailers_dict.get("CellophaneAction") != [action]
+            ):
+                continue
+
+            # Check if the module is specified in the commit message
+            if module is not None and (
+                commit.trailers_dict.get("CellophaneModuleAction") is None
+                or commit.trailers_dict.get("CellophaneModule") != [module]
+            ):
+                continue
+
+            yield commit
+
     @property
     def modules(self) -> set[str]:
         """Retrieves the list of modules in the repository.
@@ -178,7 +223,9 @@ class ProjectRepo(Repo):
             List[str]: The list of module names.
 
         """
-        return {name for name, item in self.external.modules.items() if (Path("modules") / name).exists()}
+        return {
+            name for name, item in self.external.modules.items() if (Path("modules") / Path(item["path"]).name).exists()
+        }
 
     @property
     def absent_modules(self) -> set[str]:

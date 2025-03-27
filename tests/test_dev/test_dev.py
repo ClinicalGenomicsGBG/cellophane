@@ -12,6 +12,9 @@ from pytest import LogCaptureFixture, TempPathFactory, fixture, mark, param, rai
 from pytest_mock import MockerFixture
 
 from .fixtures import *  # noqa: F403
+from ruamel.yaml import YAML
+
+yaml = YAML()
 
 
 class Test_ProjectRepo:
@@ -261,7 +264,7 @@ class Test_module_cli:
         assert "chore(cellophane): Update module a->2.0.0" in repo.head.commit.message, result.stdout
 
         result = self.runner.invoke(dev.main, "module update a@1.0.0")
-        assert repo.head.commit == original_head, repo.git.log()
+        assert repo.head.commit == original_head, result.stdout
 
         result = self.runner.invoke(dev.main, "module update a@INVALID")
         assert result.stdout == literal("Version 'INVALID' is invalid for module 'a'")
@@ -283,8 +286,8 @@ class Test_module_cli:
         result = self.runner.invoke(dev.main, "module add a@1.0.0 b@1.0.0")
         repo.remote("origin").push()
 
-        self.runner.invoke(dev.main, "module rm a")
-        assert "chore(cellophane): Remove module a" in repo.head.commit.message
+        result = self.runner.invoke(dev.main, "module rm a")
+        assert "chore(cellophane): Remove module a" in repo.head.commit.message, result.stdout
 
         previous_head = project_repo.head.commit
         self.runner.invoke(dev.main, "module rm a")
@@ -430,7 +433,7 @@ class Test_module_cli:
         assert commit_2 in all_commits
 
 
-class Test_cli_init:
+class Test_project_cli:
     """Test cellophane CLI for initializing a new project."""
 
     runner = CliRunner()
@@ -448,12 +451,12 @@ class Test_cli_init:
     @mark.parametrize(
         "command,exit_code",
         [
-            param("init DUMMY", 0, id="init"),
-            param("init DUMMY", 1, id="init_exists"),
-            param("init DUMMY --force", 0, id="init_force"),
+            param("project init DUMMY", 0, id="init"),
+            param("project init DUMMY", 1, id="init_exists"),
+            param("project init DUMMY --force", 0, id="init_force"),
         ],
     )
-    def test_init_cli(
+    def test_project_init(
         self,
         project_path: Path,
         command: str,
@@ -465,7 +468,7 @@ class Test_cli_init:
         result = self.runner.invoke(dev.main, f"--modules-repo {modules_repo.working_dir} {command}")
         assert result.exit_code == exit_code, result.stdout
 
-    def test_init_cli_unhandled_exception(
+    def test_project_init_unhandled_exception(
         self,
         tmp_path: Path,
         mocker: MockerFixture,
@@ -477,5 +480,72 @@ class Test_cli_init:
             side_effect=Exception("DUMMY"),
         )
         chdir(tmp_path)
-        result = self.runner.invoke(dev.main, f"--modules-repo {modules_repo.working_dir} init DUMMY")
+        result = self.runner.invoke(dev.main, f"--modules-repo {modules_repo.working_dir} project init DUMMY")
         assert result.exit_code == 1
+
+    def test_project_update(
+        self,
+        project_repo: dev.ProjectRepo,
+    ) -> None:
+        """Test cellophane CLI for updating a project."""
+        repo = project_repo
+        original_head = repo.head.commit
+
+        path = Path(repo.working_dir)
+
+        result = self.runner.invoke(dev.main, "project update")
+        assert repo.head.commit == original_head, result.stdout
+
+        self.runner.invoke(dev.main, "module add a@1.0.0")
+        add_commit = repo.head.commit
+        self.runner.invoke(dev.main, "project update")
+        assert repo.head.commit == add_commit
+
+        (path / "schema.yaml").write_text("!INVALID!")
+        repo.index.add("schema.yaml")
+        repo.index.write()
+        schema_commit = repo.index.commit("Update schema")
+
+        result = self.runner.invoke(dev.main, "project update")
+        assert "Unhandled exception" in result.stdout
+        assert repo.head.commit == schema_commit, result.stdout
+
+        with open("schema.yaml", "w") as file:
+            yaml.dump({"properties": {"dummy": {"type": "string", "default": "DUMMY"}}}, file)
+        repo.index.add("schema.yaml")
+        repo.index.write()
+        schema_commit = repo.index.commit("Update schema")
+
+        assert (path / "config.example.yaml").read_text() != literal('dummy: "DUMMY"')
+        result = self.runner.invoke(dev.main, "project update")
+        assert (path / "config.example.yaml").read_text() == literal('dummy: "DUMMY"')
+
+        (path / "modules" / "mymodule").mkdir(parents=True)
+        with open(path / "modules" / "mymodule" / "requirements.txt", "w") as file:
+            file.write("DUMMY==1.0.0")
+        repo.index.add("modules/mymodule/requirements.txt")
+        repo.index.write()
+        repo.index.commit("Add mymodule")
+
+        assert (path / "modules" / "requirements.txt").read_text() != literal("\n-r modules/mymodule/requirements.txt\n")
+        result = self.runner.invoke(dev.main, "project update")
+        assert (path / "modules" / "requirements.txt").read_text() == literal("\n-r modules/mymodule/requirements.txt\n")
+
+    def test_project_update_invalid_repo(self, tmp_path: Path) -> None:
+        """Test cellophane CLI for updating a project with invalid repository."""
+
+        chdir(tmp_path)
+        result = self.runner.invoke(dev.main, "project update")
+        assert result.stdout == literal("Invalid cellophane project repository '.'")
+        assert result.exit_code == 1
+
+    def test_project_update_dirty_repo(self, project_repo: dev.ProjectRepo) -> None:
+        """Test cellophane CLI for updating a project with invalid repository."""
+
+        repo = project_repo
+        path = Path(repo.working_dir)
+        (path / "modules" / "requirements.txt").write_text("DIRTY")
+        result = self.runner.invoke(dev.main, "project update")
+        assert result.stdout == literal("Repository has uncommited changes")
+        assert result.exit_code == 1
+

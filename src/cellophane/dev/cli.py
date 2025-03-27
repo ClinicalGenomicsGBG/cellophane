@@ -18,14 +18,13 @@ from .exceptions import (
 )
 from .repo import ProjectRepo
 from .util import (
-    add_requirements,
     add_version_tags,
-    commit_module_changes,
+    commit_changes,
     drop_local_commits,
     initialize_project,
-    remove_requirements,
     rewrite_action,
     update_example_config,
+    update_requirements,
 )
 
 
@@ -166,38 +165,94 @@ def module_action(
             "rm": f"Remove module {module}",
         }
         try:
-            previous_actions = drop_local_commits(repo, index, module, logger)
-            module_path = Path(repo.external.modules[module]["path"])
-            index.remove(path / f"modules/{module_path.name}", working_tree=True, r=True, ignore_unmatch=True)
+            previous_commits = drop_local_commits(repo, index, logger, action="module", module=module)
+            module_dir_name = Path(repo.external.modules[module]["path"]).name
+            module_path = path / "modules" / module_dir_name
+            index.remove(module_path, working_tree=True, r=True, ignore_unmatch=True)
 
-            remove_requirements(path, module_path)
             if action in ["add", "update"]:
                 # Append the module name to the tag if it is not a valid tag
                 _tag = tag if tag in [r.name for r in repo.tags] else f"modules/{tag}"
                 # Read the tree from the modules repository and add it to the 'modules' directory
-                repo.git.read_tree(f"--prefix=modules/{module_path.name}/", "-u", f"{_tag}:{module_path}")
+                repo.git.read_tree(f"--prefix=modules/{module_dir_name}/", "-u", f"{_tag}:{module_path}")
 
-            new_action = rewrite_action(index, module_path, previous_actions, action)
-            add_requirements(path, module_path)
+            new_action = rewrite_action(index, module_path, previous_commits, action)
+
+            update_requirements(path)
             update_example_config(path)
-
+            logger.info(msg[action])
+            if new_action is not None:
+                commit_changes(
+                    index=index,
+                    msg=msg[new_action],
+                    add_paths=[
+                        "modules/requirements.txt",
+                        "config.example.yaml",
+                        *([f"modules/{module_path.name}"] if new_action != "rm" else []),
+                    ],
+                    trailers={
+                        "CellophaneAction": "module",
+                        "CellophaneModule": module,
+                        "CellophaneModuleAction": new_action,
+                    },
+                )
         except Exception as exc:
             logger.error(f"{msg[action]} failed: {exc!r}", exc_info=True)
             repo.head.reset(previous_head, index=True, working_tree=True)
-        else:
-            logger.info(msg[action])
-            if new_action is not None:
-                commit_module_changes(
-                    index=index,
-                    module_=module,
-                    action=new_action,
-                    msg=msg[new_action],
-                )
         finally:
             index.update()
 
 
-@main.command()
+@main.group()
+def project() -> None:
+    """Manage project configurations"""
+    ...
+
+
+@project.command()
+@click.pass_context
+def update(ctx: click.Context) -> None:
+    """Update project requirements and example configuration"""
+    logger: logging.LoggerAdapter = ctx.obj["logger"]
+    logger.info("Updating project requirements and example configuration")
+    try:
+        repo = ProjectRepo(
+            ctx.obj["path"],
+            ctx.obj["modules_repo_url"],
+            ctx.obj["modules_repo_branch"],
+        )
+    except (InvalidProjectRepoError, InvalidModulesRepoError) as exc:
+        logger.critical(exc, exc_info=True)
+        raise SystemExit(1) from exc
+
+    if repo.is_dirty():
+        logger.critical("Repository has uncommited changes")
+        raise SystemExit(1)
+
+    index = repo.index
+    previous_head = repo.head.commit
+    try:
+        drop_local_commits(repo, index, logger, action="update")
+        update_requirements(ctx.obj["path"])
+        update_example_config(ctx.obj["path"])
+        index.add(["modules/requirements.txt", "config.example.yaml"])
+        if not index.diff("HEAD", ["modules/requirements.txt", "config.example.yaml"]):
+            logger.info("No changes detected")
+            index.reset(previous_head, index=True, working_tree=True)
+            return
+        commit_changes(
+            index=index,
+            msg="Update requirements and example configuration",
+            add_paths=["modules/requirements.txt", "config.example.yaml"],
+            trailers={"CellophaneAction": "update"},
+        )
+    except Exception as exc:
+        logger.critical(f"Unhandled exception: {exc!r}", exc_info=True)
+        repo.head.reset(previous_head, index=True, working_tree=True)
+        raise SystemExit(1) from exc
+
+
+@project.command()
 @click.option(
     "--force",
     is_flag=True,

@@ -182,21 +182,37 @@ class ProjectRepo(Repo):
         finally:
             remote.fetch()
 
-    def module_commits(self, module_: str, local_only: bool = False) -> Iterator[Commit]:
+    def local_commits(
+        self,
+        module: str | None = None,
+        paths: Path | None = None,
+        action: str | None = None,
+    ) -> Iterator[Commit]:
         """Retrieves the commit associated with the specified module."""
-        for commit in self.iter_commits("@{upstream}.." if local_only else None):
-            if (
-                (
-                    isinstance(commit.message, str)
-                    and commit.message.startswith("chore(cellophane):")
-                    or isinstance(commit.message, bytes)
-                    and commit.message.startswith(b"chore(cellophane):")
-                )
-                and "CellophaneModule" in commit.trailers_dict
-                and "CellophaneModuleAction" in commit.trailers_dict
-                and commit.trailers_dict["CellophaneModule"][0] == module_
+        for commit in self.iter_commits("@{upstream}..", paths=paths):
+            # Check if the commit message is a cellophane commit
+            if commit.trailers_dict.get("CellophaneAction") is None or not (
+                isinstance(commit.message, str)
+                and commit.message.startswith("chore(cellophane):")
+                or isinstance(commit.message, bytes)
+                and commit.message.startswith(b"chore(cellophane):")
             ):
-                yield commit
+                continue
+
+            # Check if the specified action is in the commit message
+            if action is not None and (
+                commit.trailers_dict.get("CellophaneAction") != [action]
+            ):
+                continue
+
+            # Check if the module is specified in the commit message
+            if module is not None and (
+                commit.trailers_dict.get("CellophaneModuleAction") is None
+                or commit.trailers_dict.get("CellophaneModule") != [module]
+            ):
+                continue
+
+            yield commit
 
     @property
     def modules(self) -> set[str]:
@@ -207,7 +223,9 @@ class ProjectRepo(Repo):
             List[str]: The list of module names.
 
         """
-        return {name for name, item in self.external.modules.items() if (Path("modules") / Path(item["path"]).name).exists()}
+        return {
+            name for name, item in self.external.modules.items() if (Path("modules") / Path(item["path"]).name).exists()
+        }
 
     @property
     def absent_modules(self) -> set[str]:

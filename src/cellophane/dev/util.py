@@ -7,7 +7,7 @@ from pathlib import Path
 from textwrap import dedent
 from typing import Iterable, Literal
 
-from git import GitCommandError, IndexFile, Repo
+from git import Commit, GitCommandError, IndexFile, Repo
 from questionary import Choice, checkbox, select
 from rich.console import Console
 
@@ -22,42 +22,23 @@ from .exceptions import (
 from .repo import ProjectRepo
 
 
-def add_requirements(path: Path, module_path: Path) -> None:
-    """Add module requirements to the global requirements file.
+def update_requirements(path: Path) -> None:
+    """Update the requirements file for the project.
 
     Args:
     ----
-      path (Path): The path to the root of the application.
-      _module (str): The name of the module.
-
+      path (Path): The path to the root of the application
     """
-    requirements_path = path / "modules" / "requirements.txt"
-    module_path = path / "modules" / module_path.name
 
-    if (
-        module_path.is_dir()
-        and (module_path / "requirements.txt").exists()
-        and (spec := f"-r {module_path.name}/requirements.txt\n") not in requirements_path.read_text()
-    ):
-        with open(requirements_path, "a", encoding="utf-8") as handle:
-            handle.write(spec)
-
-
-def remove_requirements(path: Path, module_path: Path) -> None:
-    """Remove a specific module's requirements from the project's requirements.txt file.
-
-    Args:
-    ----
-      path (Path): The path to the project directory.
-      _module (str): The name of the module to remove requirements for.
-
-    """
-    requirements_path = path / "modules" / "requirements.txt"
-
-    if (spec := f"-r {module_path.name}/requirements.txt\n") in (requirements := requirements_path.read_text()):
-        with open(requirements_path, "w", encoding="utf-8") as handle:
-            handle.write(requirements.replace(spec, ""))
-
+    with open(path / "modules" / "requirements.txt", "w", encoding="utf-8") as handle:
+        handle.write(
+            (CELLOPHANE_ROOT / "template" / "modules" / "requirements.txt")
+            .read_text(encoding="utf-8")
+        )
+        handle.writelines(
+            f"-r {req.relative_to(path)}\n"
+            for req in (path / "modules").glob("*/requirements.txt")
+        )
 
 def update_example_config(path: Path) -> None:
     """Update the example configuration file.
@@ -277,7 +258,6 @@ def initialize_project(
     (path / "modules" / "requirements.txt").write_text(
         (CELLOPHANE_ROOT / "template" / "modules" / "requirements.txt")
         .read_text(encoding="utf-8")
-        .format(label=name, prog_name=_prog_name),
     )
 
     update_example_config(path)
@@ -305,9 +285,10 @@ def initialize_project(
 def drop_local_commits(
     repo: ProjectRepo,
     index: IndexFile,
-    module_: str,
     logger: logging.LoggerAdapter,
-) -> list[Literal["add", "update", "rm"]]:
+    action: Literal["module", "update"] | None = None,
+    module: str | None = None,
+) -> list[Commit]:
     """Recompute the action to take based on local commits for a module.
 
     Remove all commits for the module not yet in upstream and recompute the action
@@ -337,27 +318,26 @@ def drop_local_commits(
     -------
         Literal["add", "update", "rm"] | None: The recomputed action to take (or None for no-op).
     """
-    previous_actions: list[Literal["add", "update", "rm"]] = []
+    previous_commits = [*repo.local_commits(module=module, action=action)]
     try:
-        for commit in repo.module_commits(module_, local_only=True):
+        for commit in previous_commits:
             current_head = repo.head.commit
             # Remove all commits for the module not yet in upstream
             repo.git.rebase(f"--onto={commit.hexsha}^", commit.hexsha)
-            previous_actions.append(commit.trailers_dict["CellophaneModuleAction"][0])  # type: ignore[arg-type]
     except Exception as exc:
         # Revert to previous state if rebase fails
-        logger.warning(f"Unable to remove previous commit '{commit.hexsha[:6]}' for '{module_}': {exc!r}")
+        logger.warning(f"Unable to remove previous commit '{commit.hexsha[:6]}': {exc!r}")
         with suppress(GitCommandError):
             repo.git.rebase("--abort")
         index.reset(current_head, index=True, working_tree=True)
 
-    return previous_actions
+    return previous_commits
 
 
 def rewrite_action(
     index: IndexFile,
-    path: Path,
-    previous_actions: list[Literal["add", "update", "rm"]],
+    module_path: Path,
+    previous_commits: list[Commit],
     action: Literal["add", "update", "rm"],
 ) -> Literal["add", "update", "rm"] | None:
     """Rewrite the action to take based on the module's current state.
@@ -375,8 +355,10 @@ def rewrite_action(
     -------
         Literal["add", "update", "rm"] | None: The recomputed action to take (or None for no-op).
     """
+    previous_actions = [c.trailers_dict["CellophaneModuleAction"][0] for c in previous_commits]
+
     # No changes compared to HEAD
-    if previous_actions and not index.diff("HEAD", paths=path):
+    if previous_actions and not index.diff("HEAD", paths=module_path):
         return None
     # All commits for the module not yet in upstream were removed
     elif "add" in previous_actions and action == "update":
@@ -391,11 +373,11 @@ def rewrite_action(
     return action
 
 
-def commit_module_changes(
+def commit_changes(
     index: IndexFile,
-    module_: str,
-    action: Literal["add", "update", "rm"],
     msg: str,
+    trailers: dict[str, str],
+    add_paths: list[str] | None = None,
 ) -> None:
     """Commit changes to a module in the project repository.
 
@@ -408,16 +390,12 @@ def commit_module_changes(
         add_paths (Sequence[str]): The paths to add to the commit.
         logger (logging.LoggerAdapter): The logger instance.
     """
-
+    for path in add_paths or []:
+        index.add(path)
     index.add("config.example.yaml")
     index.add("modules/requirements.txt")
     index.write()
 
-    _msg = f"""
-        chore(cellophane): {msg}
-
-
-        CellophaneModule: {module_}
-        CellophaneModuleAction: {action}
-    """
+    _trailers = "\n".join(f"{k}: {v}" for k, v in trailers.items())
+    _msg = f"chore(cellophane): {msg}\n\n{_trailers}"
     index.commit(dedent(_msg).strip())

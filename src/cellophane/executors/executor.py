@@ -93,6 +93,8 @@ class Executor:
     def _callback(
         self,
         result: Any,
+        name: str,
+        uuid: UUID,
         fn: Callable | None,
         msg: str,
         logger: logging.LoggerAdapter,
@@ -103,7 +105,7 @@ class Executor:
         try:
             (fn or (lambda _: ...))(result)
         except Exception as exc:  # pylint: disable=broad-except
-            logger.error(f"Callback failed: {exc!r}")
+            logger.error(f"Exception in callback of {self.name} job '{name}' (UUID={uuid.hex[:8]}): {exc!r}", exc_info=exc)
         lock.release()
 
     def _target(
@@ -312,6 +314,8 @@ class Executor:
                 msg=f"Completed {self.name} job '{_name}' (UUID={_uuid.hex[:8]})",
                 logger=logger,
                 lock=self.locks[_uuid],
+                name=_name,
+                uuid=_uuid,
             ),
             error_callback=partial(
                 self._callback,
@@ -319,6 +323,8 @@ class Executor:
                 msg=f"Error in {self.name} job '{_name}' (UUID={_uuid.hex[:8]})",
                 logger=logger,
                 lock=self.locks[_uuid],
+                name=_name,
+                uuid=_uuid,
             ),
         )
         if wait:

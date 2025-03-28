@@ -133,8 +133,8 @@ class Test_executor_submit(BaseTest):
     def test_executor_conda(self, invocation: Invocation) -> None:
         assert invocation.logs == regex(
             "bootstrap_micromamba\\.sh ping localhost -c 1",
-            f"env\\._CONDA_ENV_SPEC=conda/{UUID4_HEX_REGEX}\\.environment\\.yaml",
-            f"env\\._CONDA_ENV_NAME={UUID4_HEX_REGEX}",
+            f"env\\._CONDA_ENV_SPEC=mock_job.{UUID4_HEX_REGEX}\\.environment\\.yaml",
+            f"env\\._CONDA_ENV_NAME=mock_job.{UUID4_HEX_REGEX}",
         )
 
     @mark.override(

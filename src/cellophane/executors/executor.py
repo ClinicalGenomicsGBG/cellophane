@@ -142,13 +142,12 @@ class Executor:
                 data.PreservedDict,
                 lambda dumper, data: dumper.represent_dict(data)
             )
-            (workdir_ / "conda").mkdir(parents=True, exist_ok=True)
-            conda_env_spec = workdir_ / "conda" / f"{uuid.hex}.environment.yaml"
+            conda_env_spec = workdir_ / f"{name}.{uuid.hex}.environment.yaml"
             micromamba_bootstrap = _ROOT / "scripts" / "bootstrap_micromamba.sh"
             with open(conda_env_spec, "w") as f:
                 yaml.dump(conda_spec, f)
             env_["_CONDA_ENV_SPEC"] = str(conda_env_spec.relative_to(workdir_))
-            env_["_CONDA_ENV_NAME"] = f"{uuid.hex}"
+            env_["_CONDA_ENV_NAME"] = f"{name}.{uuid.hex}"
             args_ = (str(micromamba_bootstrap), *args_)
 
         try:
@@ -289,7 +288,7 @@ class Executor:
 
         """
         _uuid = uuid or uuid4()
-        _name = name or self.__class__.name
+        _name = name or f"{self.__class__.name}_job"
         logger = logging.LoggerAdapter(logging.getLogger(), {"label": _name})
         self.locks[_uuid] = mp.Lock()
         self.locks[_uuid].acquire()

@@ -95,6 +95,7 @@ class Runner:
                     cleaner=cleaner,
                     checkpoints=Checkpoints(
                         samples=samples,
+                        prefix=f"runner.{self.name}",
                         workdir=workdir,
                         config=config,
                     ),

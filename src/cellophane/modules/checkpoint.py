@@ -34,14 +34,17 @@ class Checkpoint:
     label: str
     workdir: Path
     config: Config
-    samples: Samples
+    _samples: Samples
+    prefix: str
+    base_path: Path
     file: Path = field(init=False)
     _cache: dict[str, str] | None = field(init=False)
     _extra_paths: set[Path] = field(factory=set)
 
     def __attrs_post_init__(self, *args: Any, **kwargs: Any) -> None:
         del args, kwargs  # unused
-        self.file = self.workdir / f".checkpoints.{self.label}.json"
+
+        self.file = self.base_path / f"{self.prefix}.{self.label}.json"
         try:
             self._cache = json.loads(self.file.read_text())
         except Exception:  # pylint: disable=broad-except
@@ -206,14 +209,23 @@ class Checkpoints:
     """
 
     samples: Samples
-    workdir: Path
     config: Config
+    prefix: str
+    workdir: Path
+    base_path: Path = field(init=False)
     _checkpoints: dict[str, Checkpoint] = field(factory=dict)
+
+    def __attrs_post_init__(self, *args: Any, **kwargs: Any) -> None:
+        del args, kwargs
+        self.base_path = self.config.workdir / self.config.tag / "checkpoints"
+        self.base_path.mkdir(parents=True, exist_ok=True)
 
     def __getattr__(self, key: str) -> Checkpoint:
         if key not in self._checkpoints:
             self._checkpoints[key] = Checkpoint(
                 label=key,
+                base_path=self.base_path,
+                prefix=self.prefix,
                 workdir=self.workdir,
                 config=self.config,
                 samples=self.samples,

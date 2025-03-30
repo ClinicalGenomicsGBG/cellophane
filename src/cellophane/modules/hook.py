@@ -113,6 +113,7 @@ class Hook:
                 cleaner=cleaner,
                 checkpoints=Checkpoints(
                     samples=samples,
+                    prefix=f"{self.when}-hook.{self.name}",
                     workdir=config.workdir / config.tag,
                     config=config,
                 ),

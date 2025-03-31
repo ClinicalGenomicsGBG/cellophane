@@ -263,8 +263,7 @@ def initialize_project(
     update_example_config(path)
 
     repo = Repo.init(str(path))
-    index = repo.index
-    index.add(
+    repo.git.add(
         [
             path / "modules" / "__init__.py",
             path / "modules" / "requirements.txt",
@@ -276,8 +275,7 @@ def initialize_project(
             path / ".gitignore",
         ],
     )
-    index.write()
-    index.commit("feat(cellophane): Initial commit from cellophane 🎉")
+    repo.index.commit("feat(cellophane): Initial commit from cellophane 🎉")
 
     return ProjectRepo(path, modules_repo_url, modules_repo_branch)
 
@@ -375,6 +373,7 @@ def rewrite_action(
 
 def commit_changes(
     index: IndexFile,
+    repo: Repo,
     msg: str,
     trailers: dict[str, str],
     add_paths: list[str] | None = None,
@@ -390,12 +389,7 @@ def commit_changes(
         add_paths (Sequence[str]): The paths to add to the commit.
         logger (logging.LoggerAdapter): The logger instance.
     """
-    for path in add_paths or []:
-        index.add(path)
-    index.add("config.example.yaml")
-    index.add("modules/requirements.txt")
-    index.write()
-
+    repo.git.add(*(add_paths or []), "config.example.yaml", "modules/requirements.txt")
     _trailers = "\n".join(f"{k}: {v}" for k, v in trailers.items())
     _msg = f"chore(cellophane): {msg}\n\n{_trailers}"
     index.commit(dedent(_msg).strip())

@@ -65,9 +65,8 @@ class Test_ModulesRepo:
         local_path = Path(modules_repo.working_dir)
         (local_path / "modules.json").write_text("INVALID")
 
-        index.add("modules.json")
+        repo.git.add("modules.json")
         index.commit("Invalid modules.json")
-        index.write()
         repo.remote("origin").push("master")
         with raises(dev.InvalidModulesRepoError):
             repo.modules
@@ -187,7 +186,7 @@ class Test_module_cli:
     ) -> None:
         """Test module CLI with dirty cellophane repository."""
         (Path(project_repo.working_dir) / "DIRTY").touch()
-        project_repo.index.add("DIRTY")
+        project_repo.git.add("DIRTY")
         result = self.runner.invoke(dev.main, "module add")
         assert caplog.messages == literal("Repository has uncommited changes")
         assert result.exit_code == 1
@@ -385,8 +384,7 @@ class Test_module_cli:
         # If a module is updated twice, the first update commit should be removed
         (Path(modules_repo.working_dir) / "modules" / "a" / "A").write_text("UPDATED")
         modules_repo.heads["dev"].checkout()
-        modules_repo.index.add("modules/a/A")
-        modules_repo.index.write()
+        modules_repo.git.add("modules/a/A")
         modules_repo.index.commit("Update module a")
         modules_repo.remote("origin").push("dev")
 
@@ -507,8 +505,7 @@ class Test_project_cli:
         assert project_repo.head.commit == add_commit
 
         (path / "schema.yaml").write_text("!INVALID!")
-        project_repo.index.add("schema.yaml")
-        project_repo.index.write()
+        project_repo.git.add("schema.yaml")
         schema_commit = project_repo.index.commit("Update schema")
 
         self.runner.invoke(dev.main, "project update")
@@ -517,8 +514,7 @@ class Test_project_cli:
 
         with open("schema.yaml", "w") as file:
             yaml.dump({"properties": {"dummy": {"type": "string", "default": "DUMMY"}}}, file)
-        project_repo.index.add("schema.yaml")
-        project_repo.index.write()
+        project_repo.git.add("schema.yaml")
         schema_commit = project_repo.index.commit("Update schema")
 
         assert (path / "config.example.yaml").read_text() != literal('dummy: "DUMMY"')
@@ -528,8 +524,7 @@ class Test_project_cli:
         (path / "modules" / "mymodule").mkdir(parents=True)
         with open(path / "modules" / "mymodule" / "requirements.txt", "w") as file:
             file.write("DUMMY==1.0.0")
-        project_repo.index.add("modules/mymodule/requirements.txt")
-        project_repo.index.write()
+        project_repo.git.add("modules/mymodule/requirements.txt")
         project_repo.index.commit("Add mymodule")
 
         assert (path / "modules" / "requirements.txt").read_text() != literal(

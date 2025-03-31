@@ -188,7 +188,7 @@ def module_action(
                     add_paths=[
                         "modules/requirements.txt",
                         "config.example.yaml",
-                        *([f"modules/{module_path.name}"] if new_action != "rm" else []),
+                        *([f"modules/{module_dir_name}"] if new_action != "rm" else []),
                     ],
                     trailers={
                         "CellophaneAction": "module",

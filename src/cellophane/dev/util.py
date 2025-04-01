@@ -98,7 +98,7 @@ def ask_version(module_: str, valid_versions: Iterable[tuple[str, str]]) -> tupl
 
     _versions = select(
         f"Select version for {module_}",
-        choices=[Choice(title=version, value=(tag, version)) for version, tag in valid_versions],
+        choices=[Choice(title=version, value=(version, tag)) for version, tag in valid_versions],
         erase_when_done=True,
     ).ask()
     Console().show_cursor()

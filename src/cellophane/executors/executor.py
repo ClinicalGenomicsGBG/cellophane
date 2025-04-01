@@ -19,7 +19,7 @@ from mpire.async_result import AsyncResult
 from mpire.exception import InterruptWorker
 from ruamel.yaml import YAML
 
-from cellophane import cfg, logs
+from cellophane import cfg, data, logs
 
 _LOCKS: dict[UUID, dict[UUID, Lock]] = {}
 _POOLS: dict[UUID, WorkerPool] = {}
@@ -130,6 +130,10 @@ class Executor:
         args_ = tuple(word for arg in args for word in shlex.split(str(arg)))
         if conda_spec:
             yaml = YAML(typ="safe")
+            yaml.representer.add_representer(
+                data.PreservedDict,
+                lambda dumper, data: dumper.represent_dict(data)
+            )
             (workdir_ / "conda").mkdir(parents=True, exist_ok=True)
             conda_env_spec = workdir_ / "conda" / f"{uuid.hex}.environment.yaml"
             micromamba_bootstrap = _ROOT / "scripts" / "bootstrap_micromamba.sh"

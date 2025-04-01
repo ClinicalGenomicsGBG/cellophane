@@ -13,6 +13,8 @@ from cellophane.data import Samples
 from cellophane.executors import Executor
 from cellophane.util import Timestamp
 
+from .checkpoint import Checkpoints
+
 
 class _AFTER_ALL: ...
 
@@ -109,6 +111,12 @@ class Hook:
                 workdir=_workdir,
                 executor=executor,
                 cleaner=cleaner,
+                checkpoints=Checkpoints(
+                    samples=samples,
+                    prefix=f"{self.when}-hook.{self.name}",
+                    workdir=config.workdir / config.tag,
+                    config=config,
+                ),
             ):
                 case returned if isinstance(returned, Samples):
                     _ret = returned

@@ -1,9 +1,10 @@
 import json
 import time
+from contextlib import suppress
 from functools import cached_property
 from pathlib import Path
 from random import randbytes
-from typing import Any, Iterator
+from typing import Any, Iterator, Sequence
 
 from attrs import define, field
 from dill import dumps
@@ -33,13 +34,17 @@ class Checkpoint:
     label: str
     workdir: Path
     config: Config
-    samples: Samples
+    _samples: Samples
+    prefix: str
+    base_path: Path
     file: Path = field(init=False)
     _cache: dict[str, str] | None = field(init=False)
+    _extra_paths: set[Path] = field(factory=set)
 
     def __attrs_post_init__(self, *args: Any, **kwargs: Any) -> None:
         del args, kwargs  # unused
-        self.file = self.workdir / f".checkpoints.{self.label}.json"
+
+        self.file = self.base_path / f"{self.prefix}.{self.label}.json"
         try:
             self._cache = json.loads(self.file.read_text())
         except Exception:  # pylint: disable=broad-except
@@ -47,7 +52,7 @@ class Checkpoint:
 
     @cached_property
     def _paths(self) -> set[Path]:
-        paths = set()
+        paths = self._extra_paths.copy()
         for sample in self.samples:
             paths |= {*sample.files}
         for output in self._outputs:
@@ -72,6 +77,26 @@ class Checkpoint:
                 paths |= {*path.rglob("*")}
 
         return paths
+
+    @property
+    def paths(self) -> set[Path]:
+        return self._paths
+
+    @paths.setter
+    def paths(self, paths: Sequence[Path]) -> None:
+        self._extra_paths = {*paths}
+        with suppress(AttributeError):
+            del self._paths
+
+    @property
+    def samples(self) -> Samples:
+        return self._samples
+
+    @samples.setter
+    def samples(self, samples: Samples) -> None:
+        self._samples = samples
+        with suppress(AttributeError):
+            del self._paths
 
     def _hash(self, *args: Any, **kwargs: Any) -> Iterator[tuple[str, str]]:
         """Generate a hash for the samples.
@@ -111,7 +136,8 @@ class Checkpoint:
                 hash_.update(randbytes(8))
             yield str(path), hash_.hexdigest()
 
-        delattr(self, "_paths")
+        with suppress(AttributeError):
+            del self._paths
 
     def hexdigest(self, *args: Any, **kwargs: Any) -> str:
         hash_ = self._hash(*args, **kwargs)
@@ -129,12 +155,12 @@ class Checkpoint:
 
         Args:
         ----
-            tag (str): The tag for the checkpoint.
-            samples (Samples): The samples to store.
+            *args (Any): Arbitrary positional arguments to include in the hash.
             **kwargs (Any): Arbitrary keyword arguments to include in the hash.
 
         """
         self._cache = dict(self._hash(*args, **kwargs))
+        self.file.parent.mkdir(parents=True, exist_ok=True)
         with open(self.file, "w", encoding="utf-8") as file:
             file.write(json.dumps(self._cache))
 
@@ -159,6 +185,16 @@ class Checkpoint:
             and all(self._cache[f] == h for f, h in self._hash(*args, **kwargs))
         )
 
+    def add_paths(self, *paths: Path) -> None:
+        """Add additional paths to the checkpoint.
+
+        Args:
+        ----
+            *paths (Path): The paths to add to the checkpoint.
+
+        """
+        self._extra_paths |= {*paths}
+
 
 @define
 class Checkpoints:
@@ -173,14 +209,23 @@ class Checkpoints:
     """
 
     samples: Samples
-    workdir: Path
     config: Config
+    prefix: str
+    workdir: Path
+    base_path: Path = field(init=False)
     _checkpoints: dict[str, Checkpoint] = field(factory=dict)
+
+    def __attrs_post_init__(self, *args: Any, **kwargs: Any) -> None:
+        del args, kwargs
+        self.base_path = self.config.workdir / self.config.tag / "checkpoints"
+        self.base_path.mkdir(parents=True, exist_ok=True)
 
     def __getattr__(self, key: str) -> Checkpoint:
         if key not in self._checkpoints:
             self._checkpoints[key] = Checkpoint(
                 label=key,
+                base_path=self.base_path,
+                prefix=self.prefix,
                 workdir=self.workdir,
                 config=self.config,
                 samples=self.samples,

@@ -184,11 +184,12 @@ def module_action(
             if new_action is not None:
                 commit_changes(
                     index=index,
+                    repo=repo,
                     msg=msg[new_action],
                     add_paths=[
                         "modules/requirements.txt",
                         "config.example.yaml",
-                        *([f"modules/{module_path.name}"] if new_action != "rm" else []),
+                        *([f"modules/{module_dir_name}"] if new_action != "rm" else []),
                     ],
                     trailers={
                         "CellophaneAction": "module",
@@ -235,13 +236,14 @@ def update(ctx: click.Context) -> None:
         drop_local_commits(repo, index, logger, action="update")
         update_requirements(ctx.obj["path"])
         update_example_config(ctx.obj["path"])
-        index.add(["modules/requirements.txt", "config.example.yaml"])
+        repo.git.add(["modules/requirements.txt", "config.example.yaml"])
         if not index.diff("HEAD", ["modules/requirements.txt", "config.example.yaml"]):
             logger.info("No changes detected")
             index.reset(previous_head, index=True, working_tree=True)
             return
         commit_changes(
             index=index,
+            repo=repo,
             msg="Update requirements and example configuration",
             add_paths=["modules/requirements.txt", "config.example.yaml"],
             trailers={"CellophaneAction": "update"},

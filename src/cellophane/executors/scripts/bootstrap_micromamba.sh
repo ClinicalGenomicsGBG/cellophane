@@ -22,6 +22,28 @@ fi
 
 mkdir -p "${TMPDIR}/mamba"
 $DL "https://micro.mamba.pm/api/micromamba/${PLATFORM}-${ARCH}/latest" | tar -xvjC "${TMPDIR}/mamba" "bin/micromamba"
-eval "$("${TMPDIR}/mamba/bin/micromamba" shell hook -s posix)"
-micromamba env create -p "${TMPDIR}/mamba/${_CONDA_ENV_NAME}" -f "${_CONDA_ENV_SPEC}"
-micromamba run -p "${TMPDIR}/mamba/${_CONDA_ENV_NAME}" "$@"
+
+MAMBA_BIN="${TMPDIR}/mamba/bin/micromamba"
+CONDA_RC="${TMPDIR}/mamba/.condarc"
+eval "$("${MAMBA_BIN}" shell hook -s posix)"
+
+cat <<EOF > "${CONDA_RC}"
+pkgs_dirs:
+  - ${TMPDIR}/mamba/pkgs
+envs_dirs:
+  - ${TMPDIR}/mamba/envs
+EOF
+
+"${MAMBA_BIN}" \
+  --no-env \
+  --rc-file "${CONDA_RC}" \
+  env create \
+  -p "${TMPDIR}/mamba/${_CONDA_ENV_NAME}" \
+  -f "${_CONDA_ENV_SPEC}"
+
+"${MAMBA_BIN}" \
+  --no-rc \
+  --no-env \
+  run \
+  -p "${TMPDIR}/mamba/${_CONDA_ENV_NAME}" \
+  "$@"

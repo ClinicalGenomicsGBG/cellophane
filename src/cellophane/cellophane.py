@@ -25,6 +25,7 @@ from cellophane.logs import (
     start_logging_queue_listener,
 )
 from cellophane.modules import Hook, Runner, load, run_hooks, start_runners
+from cellophane.util import Timestamp
 
 spec = find_spec("cellophane")
 CELLOPHANE_ROOT = Path(spec.origin).parent  # type: ignore[union-attr, arg-type]
@@ -87,8 +88,8 @@ def cellophane(label: str, root: Path) -> click.Command:
         @with_options(schema)
         def inner(config: Config, **_: Any) -> None:
             """Run cellophane"""
-            start_time = time.localtime()
-            config.tag = config.get("tag", time.strftime("%y%m%d-%H%M%S", start_time))
+            start_time = Timestamp()
+            config.tag = config.get("tag", str(start_time))
             config.logfile = config.logdir / f"{label}.{config.tag}.log"
 
             handle_warnings()
@@ -135,7 +136,7 @@ def cellophane(label: str, root: Path) -> click.Command:
                 log_listener.stop()
                 raise SystemExit(1) from exc
 
-            time_elapsed = format_timespan(time.time() - time.mktime(start_time))
+            time_elapsed = format_timespan(time.time() - start_time)
             logger.info(f"Execution complete in {time_elapsed}")
             log_listener.stop()
 
@@ -155,7 +156,7 @@ def _main(
     config: Config,
     root: Path,
     executor_cls: type[Executor],
-    timestamp: time.struct_time,
+    timestamp: Timestamp,
 ) -> None:
     """Run cellophane"""
     # Load samples from file, or create empty samples object

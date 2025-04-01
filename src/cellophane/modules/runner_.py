@@ -16,6 +16,7 @@ from cellophane.cleanup import Cleaner, DeferredCleaner
 from cellophane.data import OutputGlob, Samples
 from cellophane.executors import Executor
 from cellophane.logs import handle_warnings, redirect_logging_to_queue
+from cellophane.util import Timestamp
 
 from .checkpoint import Checkpoints
 
@@ -60,7 +61,7 @@ class Runner:
         root: Path,
         samples: Samples,
         executor_cls: type[Executor],
-        timestamp: time.struct_time,
+        timestamp: Timestamp,
         workdir: Path,
     ) -> tuple[Samples, DeferredCleaner]:
         handle_warnings()
@@ -148,7 +149,7 @@ def _resolve_outputs(
     samples: Samples,
     workdir: Path,
     config: Config,
-    timestamp: time.struct_time,
+    timestamp: Timestamp,
     logger: LoggerAdapter,
 ) -> None:
     for output_ in samples.output.copy():
@@ -201,7 +202,7 @@ def start_runners(
     config: Config,
     root: Path,
     executor_cls: type[Executor],
-    timestamp: time.struct_time,
+    timestamp: Timestamp,
     cleaner: Cleaner,
 ) -> Samples:
     """Start cellphane runners in parallel and collect the results.

@@ -11,6 +11,7 @@ from xxhash import xxh3_64
 
 from cellophane.cfg import Config
 from cellophane.data import Output, OutputGlob, Samples
+from cellophane.util import Timestamp
 
 
 @define
@@ -59,7 +60,7 @@ class Checkpoint:
                     workdir=self.workdir,
                     # Only src is considered, so using the current time works
                     # since timestamps are never included in src paths
-                    timestamp=time.localtime(),
+                    timestamp=Timestamp(),
                 )
                 output_paths = {o.src for o in outputs}
 

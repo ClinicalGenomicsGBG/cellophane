@@ -225,7 +225,7 @@ def _main(
     if samples.failed or not config.clean:
         cleaner.unregister(config.workdir / config.tag)
     if samples.failed or not config.log.clean:
-        cleaner.unregister(config.logfile)
+        cleaner.unregister(config.logfile, ignore_outside_root=True)
 
     cleaner.clean(logger=logger)
     # If not post-hook has copied the outputs, warn the user

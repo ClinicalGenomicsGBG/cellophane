@@ -7,11 +7,13 @@ import shlex
 import sys
 from contextlib import suppress
 from functools import partial
+from inspect import signature
 from multiprocessing.synchronize import Lock
 from pathlib import Path
 from time import sleep
 from typing import Any, Callable, ClassVar, TypeVar
 from uuid import UUID, uuid4
+from warnings import warn
 
 from attrs import define, field
 from mpire import WorkerPool
@@ -39,6 +41,7 @@ class Executor:
 
     name: ClassVar[str]
     config: cfg.Config
+    workdir_base: Path
     uuid: UUID = field(init=False)
 
     def __init_subclass__(
@@ -90,6 +93,8 @@ class Executor:
     def _callback(
         self,
         result: Any,
+        name: str,
+        uuid: UUID,
         fn: Callable | None,
         msg: str,
         logger: logging.LoggerAdapter,
@@ -100,7 +105,7 @@ class Executor:
         try:
             (fn or (lambda _: ...))(result)
         except Exception as exc:  # pylint: disable=broad-except
-            logger.error(f"Callback failed: {exc!r}")
+            logger.error(f"Exception in callback of {self.name} job '{name}' (UUID={uuid.hex[:8]}): {exc!r}", exc_info=exc)
         lock.release()
 
     def _target(
@@ -123,8 +128,11 @@ class Executor:
         logs.handle_warnings()
         logger = logging.LoggerAdapter(logging.getLogger(), {"label": name})
 
-        workdir_ = workdir or config.workdir / uuid.hex
+        workdir_ = workdir or self.workdir_base / f"{name}.{uuid.hex}.{self.name}"
         workdir_.mkdir(parents=True, exist_ok=True)
+
+        stdout_path = workdir_ / f"{name}.{uuid.hex}.{self.name}.stdout"
+        stderr_path = workdir_ / f"{name}.{uuid.hex}.{self.name}.stderr"
 
         env_ = env or {}
         args_ = tuple(word for arg in args for word in shlex.split(str(arg)))
@@ -134,39 +142,54 @@ class Executor:
                 data.PreservedDict,
                 lambda dumper, data: dumper.represent_dict(data)
             )
-            (workdir_ / "conda").mkdir(parents=True, exist_ok=True)
-            conda_env_spec = workdir_ / "conda" / f"{uuid.hex}.environment.yaml"
+            conda_env_spec = workdir_ / f"{name}.{uuid.hex}.environment.yaml"
             micromamba_bootstrap = _ROOT / "scripts" / "bootstrap_micromamba.sh"
             with open(conda_env_spec, "w") as f:
                 yaml.dump(conda_spec, f)
             env_["_CONDA_ENV_SPEC"] = str(conda_env_spec.relative_to(workdir_))
-            env_["_CONDA_ENV_NAME"] = f"{uuid.hex}"
+            env_["_CONDA_ENV_NAME"] = f"{name}.{uuid.hex}"
             args_ = (str(micromamba_bootstrap), *args_)
 
         try:
-            self.target(
-                *args_,
-                name=name,
-                uuid=uuid,
-                workdir=workdir_,
-                env={k: str(v) for k, v in env_.items()},
-                os_env=os_env,
-                cpus=cpus or config.executor.cpus,
-                memory=memory or config.executor.memory,
-                config=config,
-                logger=logger,
-            )
+            logger.debug(f"Starting {self.name} job '{name}' (UUID={uuid.hex[:8]})")
+            target_signature = signature(self.target).parameters
+            kwargs = {
+                "name": name,
+                "uuid": uuid,
+                "workdir": workdir_,
+                "env": {k: str(v) for k, v in env_.items()},
+                "os_env": os_env,
+                "cpus": cpus or config.executor.cpus,
+                "memory": memory or config.executor.memory,
+                "config": config,
+                "logger": logger,
+                "stderr": stderr_path,
+                "stdout": stdout_path,
+            }
+
+            if any(arg not in target_signature for arg in ["stdout", "stderr"]):
+                kwargs.pop("stderr")
+                kwargs.pop("stdout")
+                warn(
+                    f"The target method of executor '{self.name}' does not accept 'stdout' and 'stderr' arguments. "
+                    "These arguments define 'pathlib.Path' objects pointing where cellophane expects an executor to "
+                    "write the standard output and error streams of the job. In the next major release of cellophane, "
+                    "this will raise an exception.",
+                    category=PendingDeprecationWarning,
+                )
+
+            self.target(*args_, **kwargs)  # type: ignore[arg-type]
         except InterruptWorker as exc:
-            logger.debug(f"Terminating job with uuid {uuid}")
+            logger.debug(f"Terminating {self.name} job '{name}' (UUID={uuid.hex[:8]})")
             code = self.terminate_hook(uuid, logger)
             raise SystemExit(code or 143) from exc
         except SystemExit as exc:
             if exc.code != 0:
-                logger.warning(f"Command failed with exit code: {exc.code}")
+                logger.warning(f"Non-zero exit code ({exc.code}) for {self.name} job '{name}' (UUID={uuid.hex[:8]})")
                 self.terminate_hook(uuid, logger)
                 raise exc
         except Exception as exc:  # pylint: disable=broad-except
-            logger.warning(f"Command failed with exception: {exc!r}")
+            logger.warning(f"Exception in {self.name} job '{name}' (UUID={uuid.hex[:8]}): {exc!r}", exc_info=exc)
             self.terminate_hook(uuid, logger)
             raise SystemExit(1) from exc
 
@@ -182,6 +205,8 @@ class Executor:
         memory: int,
         config: cfg.Config,
         logger: logging.LoggerAdapter,
+        stderr: Path,
+        stdout: Path,
     ) -> int | None:  # pragma: no cover
         """Will be called by the executor to execute a command.
 
@@ -211,7 +236,7 @@ class Executor:
 
         """
         # Exluded from coverage as this is a stub method.
-        del name, uuid, workdir, env, os_env, cpus, memory, config, logger  # Unused
+        del name, uuid, workdir, env, os_env, cpus, memory, config, logger, stdout, stderr  # Unused
         raise NotImplementedError
 
     def submit(
@@ -263,7 +288,7 @@ class Executor:
 
         """
         _uuid = uuid or uuid4()
-        _name = name or self.__class__.name
+        _name = name or f"{self.__class__.name}_job"
         logger = logging.LoggerAdapter(logging.getLogger(), {"label": _name})
         self.locks[_uuid] = mp.Lock()
         self.locks[_uuid].acquire()
@@ -285,16 +310,20 @@ class Executor:
             callback=partial(
                 self._callback,
                 fn=callback,
-                msg=f"Job completed: {_uuid}",
+                msg=f"Completed {self.name} job '{_name}' (UUID={_uuid.hex[:8]})",
                 logger=logger,
                 lock=self.locks[_uuid],
+                name=_name,
+                uuid=_uuid,
             ),
             error_callback=partial(
                 self._callback,
                 fn=error_callback,
-                msg=f"Job failed: {_uuid}",
+                msg=f"Error in {self.name} job '{_name}' (UUID={_uuid.hex[:8]})",
                 logger=logger,
                 lock=self.locks[_uuid],
+                name=_name,
+                uuid=_uuid,
             ),
         )
         if wait:

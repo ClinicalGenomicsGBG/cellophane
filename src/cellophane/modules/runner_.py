@@ -73,6 +73,7 @@ class Runner:
         with executor_cls(
             config=config,
             log_queue=log_queue,
+            workdir_base=workdir,
         ) as executor:
             cleanup = partial(
                 _cleanup,

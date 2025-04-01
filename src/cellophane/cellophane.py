@@ -55,7 +55,7 @@ def cellophane(label: str, root: Path) -> click.Command:
     click.rich_click.REQUIRED_LONG_STRING = "(REQUIRED)"
     click.rich_click.DEFAULT_STRING = "{}"
     click.rich_click.STYLE_OPTION_DEFAULT = "green"
-    external_filter = ExternalFilter((CELLOPHANE_ROOT, root))
+    external_filter = ExternalFilter((CELLOPHANE_ROOT, root / "modules"))
     console_handler = setup_console_handler(filters=(external_filter,))
     logger = LoggerAdapter(getLogger(), {"label": label})
 
@@ -89,13 +89,14 @@ def cellophane(label: str, root: Path) -> click.Command:
             """Run cellophane"""
             start_time = time.localtime()
             config.tag = config.get("tag", time.strftime("%y%m%d-%H%M%S", start_time))
+            config.logfile = config.logdir / f"{label}.{config.tag}.log"
 
             handle_warnings()
             console_handler.setLevel(config.log.level)
             file_handler = setup_file_handler(
-                config.logdir / f"{label}.{config.tag}.log",
+                config.logfile,
                 logger.logger,
-                filters=(external_filter,),
+                filters=(external_filter,)
             )
 
             if config.log.external:
@@ -167,6 +168,7 @@ def _main(
 
     cleaner = Cleaner(root=config.workdir / config.tag)
     cleaner.register(config.workdir / config.tag)
+    cleaner.register(config.logfile, ignore_outside_root=True)
 
     # Run pre-hooks
     samples = run_hooks(
@@ -222,6 +224,9 @@ def _main(
     # If there are failed samples, unregister the workdir from the cleaner
     if samples.failed or not config.clean:
         cleaner.unregister(config.workdir / config.tag)
+    if samples.failed or not config.log.clean:
+        cleaner.unregister(config.logfile)
+
     cleaner.clean(logger=logger)
     # If not post-hook has copied the outputs, warn the user
     if missing_outputs := [

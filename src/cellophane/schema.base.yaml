@@ -23,6 +23,10 @@ properties:
         default: false
         description: Log messages from external libraries
         type: boolean
+      clean:
+        default: true
+        description: Remove main log file after successful pipeline run
+        type: boolean
 
   executor:
     type: object

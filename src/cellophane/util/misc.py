@@ -42,7 +42,7 @@ class freeze_logs:
     Example:
     -------
         ```python
-        with silence_logs():
+        with freeze_logs():
             logging.info("This will not be printed")
         ```
 

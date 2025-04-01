@@ -36,7 +36,7 @@ def update_requirements(path: Path) -> None:
             .read_text(encoding="utf-8")
         )
         handle.writelines(
-            f"-r {req.relative_to(path)}\n"
+            f"-r {req.relative_to(path / 'modules')}\n"
             for req in (path / "modules").glob("*/requirements.txt")
         )
 

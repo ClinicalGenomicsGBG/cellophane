@@ -532,7 +532,7 @@ class Test_project_cli:
         )
         self.runner.invoke(dev.main, "project update")
         assert (path / "modules" / "requirements.txt").read_text() == literal(
-            "\n-r modules/mymodule/requirements.txt\n"
+            "\n-r mymodule/requirements.txt\n"
         )
 
     def test_project_update_invalid_repo(

@@ -225,7 +225,8 @@ def _main(
     # If there are failed samples, unregister the workdir from the cleaner
     if samples.failed or not config.clean:
         cleaner.unregister(config.workdir / config.tag)
-    if samples.failed or not config.log.clean:
+        cleaner.unregister(config.logfile, ignore_outside_root=True)
+    elif not config.log.clean:
         cleaner.unregister(config.logfile, ignore_outside_root=True)
 
     cleaner.clean(logger=logger)

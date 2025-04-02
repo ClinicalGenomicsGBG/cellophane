@@ -90,6 +90,7 @@ class OutputGlob:  # type: ignore[no-untyped-def]
         workdir: Path,
         config: Container,
         timestamp: Timestamp,
+        _warnings: bool = True,
     ) -> set[Output]:
         """Resolve the glob pattern to a list of files to be copied.
 
@@ -125,7 +126,8 @@ class OutputGlob:  # type: ignore[no-untyped-def]
                 case p:
                     pattern = str(workdir / p)
 
-            if not (matches := [Path(m) for m in glob(pattern)]) and not self.optional:
+            matches = [Path(m) for m in glob(pattern)]
+            if _warnings and not matches and not self.optional:
                 warn(f"No files matched pattern '{pattern}'")
 
             for m in matches:
@@ -141,10 +143,12 @@ class OutputGlob:  # type: ignore[no-untyped-def]
                     case None:
                         dst_name = m.name
                     case _ if len(matches) > 1:
-                        warn(
-                            f"Destination name {self.dst_name} will be ignored as '{self.src}' matches multiple files"
-                        )
-                        dst_name = m.name
+                        if _warnings:
+                            dst_name = m.name
+                            warn(
+                                f"Destination name {self.dst_name} will be ignored "
+                                "as '{self.src}' matches multiple files"
+                            )
                     case str() as n:
                         dst_name = n.format(**meta)
 

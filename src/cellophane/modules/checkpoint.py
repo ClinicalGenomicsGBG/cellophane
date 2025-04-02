@@ -5,6 +5,7 @@ from functools import cached_property
 from pathlib import Path
 from random import randbytes
 from typing import Any, Iterator, Sequence
+from warnings import warn
 
 from attrs import define, field
 from dill import dumps
@@ -38,6 +39,7 @@ class Checkpoint:
     prefix: str
     base_path: Path
     file: Path = field(init=False)
+    params: list = field(factory=list)
     _cache: dict[str, str] | None = field(init=False)
     _extra_paths: set[Path] = field(factory=set)
 
@@ -66,6 +68,7 @@ class Checkpoint:
                     # Only src is considered, so using the current time works
                     # since timestamps are never included in src paths
                     timestamp=Timestamp(),
+                    _warnings=False,
                 )
                 output_paths = {o.src for o in outputs}
 
@@ -120,9 +123,18 @@ class Checkpoint:
             tuple[str, bytes]: The name of the file and the hash.
 
         """
+        _params = self.params.copy()
+        if args or kwargs:
+            _params.extend(args)
+            _params.append(kwargs)
+            warn(
+                "Passing args or kwargs to store() is deprecated and will be removed in a future version. "
+                "Append any extra parameters for a checkpoint to the `checkpoint.params` attribute before "
+                "calling `checkpoint.store()` instead",
+            )
+
         base = xxh3_64()
-        base.update(dumps(args))
-        base.update(dumps(kwargs))
+        base.update(dumps(_params))
         base.update(self.label.encode())
 
         for path in self._paths:

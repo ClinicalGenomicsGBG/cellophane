@@ -96,6 +96,14 @@ class Test_checkpoints(BaseTest):
                     checkpoints.f.store()
                     f_4, hash_f_4 = checkpoints.f.check(), checkpoints.f.hexdigest()
 
+                    checkpoints.g.params = ["SOME_PARAMETER"]
+                    checkpoints.g.store()
+                    g_1, hash_g_1 = checkpoints.g.check(), checkpoints.g.hexdigest()
+                    checkpoints.g.params = ["SOME_OTHER_PARAMETER"]
+                    g_2, hash_g_2 = checkpoints.g.check(), checkpoints.g.hexdigest()
+                    checkpoints.g.params = ["SOME_PARAMETER"]
+                    g_3, hash_g_3 = checkpoints.g.check(), checkpoints.g.hexdigest()
+
                     a_3, hash_a_3 = checkpoints.a.check(), checkpoints.a.hexdigest()
 
                     logger.info(f"{a_1=} (False)")
@@ -157,6 +165,16 @@ class Test_checkpoints(BaseTest):
                     logger.debug(f"{hash_f_2=}")
                     logger.debug(f"{hash_f_3=}")
                     logger.debug(f"{hash_f_4=}")
+
+                    logger.info(f"{g_1=} (True)")
+                    logger.info(f"{g_2=} (False)")
+                    logger.info(f"{g_3=} (True)")
+                    logger.info(f"{hash_g_1==hash_g_2=} (False)")
+                    logger.info(f"{hash_g_2==hash_g_3=} (False)")
+                    logger.info(f"{hash_g_3==hash_g_1=} (True)")
+                    logger.debug(f"{hash_g_1=}")
+                    logger.debug(f"{hash_g_2=}")
+                    logger.debug(f"{hash_g_3=}")
                 """,
         }
     )
@@ -190,6 +208,12 @@ class Test_checkpoints(BaseTest):
             "hash_f_1==hash_f_2=True (True)",
             "hash_f_2==hash_f_3=False (False)",
             "hash_f_3==hash_f_4=True (True)",
+            "g_1=True (True)",
+            "g_2=False (False)",
+            "g_3=True (True)",
+            "hash_g_1==hash_g_2=False (False)",
+            "hash_g_2==hash_g_3=False (False)",
+            "hash_g_3==hash_g_1=True (True)",
         )
 
     @mark.override(

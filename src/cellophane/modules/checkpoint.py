@@ -66,6 +66,7 @@ class Checkpoint:
                     # Only src is considered, so using the current time works
                     # since timestamps are never included in src paths
                     timestamp=Timestamp(),
+                    _warnings=False,
                 )
                 output_paths = {o.src for o in outputs}
 

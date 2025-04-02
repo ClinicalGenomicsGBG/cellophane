@@ -58,9 +58,7 @@ class Test_exceptions(BaseTest):
         },
     )
     def test_merge_exception(self, invocation: Invocation) -> None:
-        assert invocation.logs == literal(
-            "Unhandled exception when collecting results: Exception('DUMMY')"
-        )
+        assert invocation.logs == literal("Exception when merging samples: Exception('DUMMY')")
         assert invocation.exit_code == 0
 
     @mark.override(

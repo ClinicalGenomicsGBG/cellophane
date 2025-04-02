@@ -128,7 +128,7 @@ class Test_samples(BaseTest):
                 def test_hook(samples, logger, **_):
                     for sample in samples:
                         if sample.id == "files":
-                            logger.info(f"Files: {[str(f) for f in sample.files]}")
+                            logger.info(f"Files: {sorted([str(f) for f in sample.files])}")
                         elif sample.id == "meta":
                             logger.info(f"meta.common_key={sorted(sample.meta['common_key'])}")
                             logger.info(f"meta.a={sample.meta['a']}")
@@ -148,11 +148,14 @@ class Test_samples(BaseTest):
     )
     def test_merge(self, invocation: Invocation) -> None:
         assert invocation.logs == literal(
-            "Files: ['input.txt', 'extra_a.txt', 'extra_b.txt']",
+            "Files: ['extra_a.txt', 'extra_b.txt', 'input.txt']",
             "meta.common_key=['value_a', 'value_b']",
             "meta.a=unique_for_a",
             "meta.b=unique_for_b",
-            "Failed: Reason A\nReason B",
+        )
+        assert (
+            invocation.logs == literal("Failed: Reason A\nReason B")
+            or invocation.logs == literal("Failed: Reason B\nReason A")
         )
 
 

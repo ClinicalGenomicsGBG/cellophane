@@ -7,8 +7,10 @@ from multiprocessing import Queue
 from pathlib import Path
 from typing import Callable, Literal, Sequence
 
+from mpire.exception import InterruptWorker
+
 from cellophane.cfg import Config
-from cellophane.cleanup import Cleaner
+from cellophane.cleanup import Cleaner, DeferredCleaner
 from cellophane.data import Samples
 from cellophane.executors import Executor
 from cellophane.util import Timestamp
@@ -35,6 +37,7 @@ class Hook:
     condition: Literal["always", "complete", "failed"]
     before: DEPENDENCY_TYPE
     after: DEPENDENCY_TYPE
+    per: Literal["session", "sample", "runner"] = "session"
 
     def __init__(
         self,
@@ -44,6 +47,7 @@ class Hook:
         condition: Literal["always", "complete", "failed"] = "always",
         before: DEPENDENCY_TYPE = None,
         after: DEPENDENCY_TYPE = None,
+        per: Literal["session", "sample", "runner"] = "session",
     ) -> None:
         if isinstance(before, str) and before != "all":
             before = [before]
@@ -83,6 +87,7 @@ class Hook:
         self.condition = condition
         self.func = staticmethod(func)
         self.when = when
+        self.per = per
 
     def __call__(
         self,
@@ -93,6 +98,7 @@ class Hook:
         log_queue: Queue,
         timestamp: Timestamp,
         cleaner: Cleaner,
+        checkpoints: Checkpoints,
     ) -> Samples:
         logger = LoggerAdapter(getLogger(), {"label": self.label})
         logger.debug(f"Running {self.label} hook")
@@ -111,12 +117,7 @@ class Hook:
                 workdir=_workdir,
                 executor=executor,
                 cleaner=cleaner,
-                checkpoints=Checkpoints(
-                    samples=samples,
-                    prefix=f"{self.when}-hook.{self.name}",
-                    workdir=config.workdir / config.tag,
-                    config=config,
-                ),
+                checkpoints=checkpoints,
             ):
                 case returned if isinstance(returned, Samples):
                     _ret = returned
@@ -166,14 +167,16 @@ def run_hooks(
     hooks: Sequence[Hook],
     *,
     when: Literal["pre", "post"],
+    per: Literal["session", "sample", "runner"],
     samples: Samples,
     config: Config,
     root: Path,
     executor_cls: type[Executor],
     log_queue: Queue,
     timestamp: Timestamp,
-    cleaner: Cleaner,
+    cleaner: Cleaner | DeferredCleaner,
     logger: LoggerAdapter,
+    checkpoint_suffix: str | None = None,
 ) -> Samples:
     """Run hooks at the specified time and update the samples object.
 
@@ -191,7 +194,10 @@ def run_hooks(
     """
     samples_ = deepcopy(samples)
 
-    for hook in [h for h in hooks if h.when == when]:
+    for hook in [h for h in hooks if (h.when, h.per) == (when, per)]:
+        checkpoint_prefix = f"{when}-hook.{hook.name}"
+        if checkpoint_suffix:
+            checkpoint_prefix += f".{checkpoint_suffix}"
         hook_ = partial(
             hook,
             config=config,
@@ -200,12 +206,18 @@ def run_hooks(
             log_queue=log_queue,
             timestamp=timestamp,
             cleaner=cleaner,
+            checkpoints=Checkpoints(
+                samples=samples,
+                prefix=checkpoint_prefix,
+                workdir=config.workdir / config.tag,
+                config=config,
+            ),
         )
         if hook.when == "pre":
             # Catch exceptions to allow post-hooks to run even if a pre-hook fails
             try:
                 samples_ = hook_(samples=samples_)
-            except KeyboardInterrupt:
+            except (KeyboardInterrupt, InterruptWorker):
                 logger.warning("Keyboard interrupt received, failing samples and stopping execution")
                 for sample in samples_:
                     sample.fail(f"Hook {hook.name} interrupted")

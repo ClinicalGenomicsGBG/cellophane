@@ -166,6 +166,6 @@ class Test_cleanup(BaseTest):
     )
     def test_cleanup_deferred_invalid_call(self, invocation: Invocation) -> None:
         assert invocation.logs == literal(
-            "Unhandled exception when collecting results: ValueError('Invalid action: DUMMY')"
+            "Exception when merging cleaners: ValueError('Invalid action: DUMMY')"
         )
         assert invocation.exit_code == 0

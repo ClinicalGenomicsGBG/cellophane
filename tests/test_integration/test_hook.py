@@ -9,32 +9,101 @@ class Test_hooks(BaseTest):
         args=[*args, "--samples_file samples.yaml"],
         structure={
             "modules/a.py": """
-                from cellophane import runner, post_hook, pre_hook
+                from cellophane import Sample, Samples, runner, post_hook, pre_hook
+                from attrs import define, field
 
-                @runner()
-                def runner_a(samples, **_):
+                @define(slots=False, init=False)
+                class SampleMixin(Sample):
+                    group: str | None = None
+                    var: list[str] = field(factory=list)
+
+                    @Sample.merge.register("var")
+                    @staticmethod
+                    def merge_var(this: list[str], that: list[str]):
+                        return [*this, *that]
+
+                @define(slots=False, init=False)
+                class SamplesMixin(Samples):
+                    var: list[str] = field(factory=list)
+
+                    @Samples.merge.register("var")
+                    @staticmethod
+                    def merge_var(this: list[str], that: list[str]):
+                        return [*this, *that]
+
+
+                @runner(split_by="group")
+                def runner_a(samples, logger, **_):
+                    tag = "runner_a"
+                    samples.var.append(tag)
+
                     for sample in samples:
-                        if sample.id == "fail":
+                        sample.var.append(tag)
+                        if sample.files[0].read_text() == "FAIL":
                             sample.fail("DUMMY FAIL")
                     return samples
 
-                @post_hook(condition="always")
-                def always_hook(samples, **_):
-                    ...
+                @runner(split_by="group")
+                def runner_b(samples, logger, **_):
+                    tag = "runner_b"
+                    samples.var.append(tag)
+                    logger.info(f"{tag}: {sorted(samples.unique_ids)}")
+                    for sample in samples:
+                        sample.var.append(tag)
+                    return samples
 
-                @post_hook(condition="complete")
-                def complete_hook(samples, **_):
-                    ...
+                def hook_factory(tag):
+                    def _hook(samples, logger, **_):
+                        samples.var.append(tag)
+                        logger.info(f"{tag}: {sorted(samples.unique_ids)}")
+                        for sample in samples:
+                            sample.var.append(tag)
+                        return samples
+                    _hook.__name__ = tag
+                    return _hook
 
-                @post_hook(condition="failed")
-                def fail_hook(samples, **_):
-                    ...
+                pre = pre_hook()(hook_factory("pre"))
+                post_always = post_hook(condition="always")(hook_factory("post_always"))
+                post_complete = post_hook(condition="complete")(hook_factory("post_complete"))
+                post_failed = post_hook(condition="failed")(hook_factory("post_failed"))
+                pre_per_runner = pre_hook(per="runner")(hook_factory("pre_per_runner"))
+                post_per_runner_always = post_hook(per="runner", condition="always")(hook_factory("post_per_runner_always"))
+                post_per_runner_complete = post_hook(per="runner", condition="complete")(hook_factory("post_per_runner_complete"))
+                post_per_runner_fail  = post_hook(per="runner", condition="failed")(hook_factory("post_per_runner_failed"))
+                post_per_sample_always = post_hook(per="sample", condition="always")(hook_factory("post_per_sample_always"))
+                post_per_sample_complete  = post_hook(per="sample", condition="complete")(hook_factory("post_per_sample_complete"))
+                post_per_sample_failed = post_hook(per="sample", condition="failed")(hook_factory("post_per_sample_failed"))
+
+                @post_hook(after="all")
+                def log_var(samples, logger, **_):
+                    logger.info(f"SAMPLES VAR: {samples.var}")
+                    for sample in samples:
+                        logger.info(f"SAMPLE VAR - {sample.id}: {sample.var}")
+                    return samples
             """,
             "samples.yaml": """
-                - id: pass
+                - id: pass_x_a
+                  group: x
                   files:
                   - input/pass.txt
-                - id: fail
+                - id: pass_x_b
+                  group: x
+                  files:
+                  - input/pass.txt
+                - id: pass_y_c
+                  group: y
+                  files:
+                  - input/pass.txt
+                - id: fail_x_a
+                  group: x
+                  files:
+                  - input/fail.txt
+                - id: fail_y_b
+                  group: y
+                  files:
+                  - input/fail.txt
+                - id: fail_y_c
+                  group: y
                   files:
                   - input/fail.txt
             """,
@@ -44,9 +113,36 @@ class Test_hooks(BaseTest):
     )
     def test_hooks(self, invocation: Invocation) -> None:
         assert invocation.logs == literal(
-            "Running fail_hook hook",
-            "Running always_hook hook",
-            "Running complete_hook hook",
+            "Running pre hook",
+            "Running post_always hook",
+            "Running post_failed hook",
+            "Running post_complete hook",
+            "Running pre_per_runner hook",
+            "Running post_per_runner_always hook",
+            "pre: ['fail_x_a', 'fail_y_b', 'fail_y_c', 'pass_x_a', 'pass_x_b', 'pass_y_c']",
+            "pre_per_runner: ['fail_x_a', 'pass_x_a', 'pass_x_b']",
+            "pre_per_runner: ['fail_y_b', 'fail_y_c', 'pass_y_c']",
+            "post_per_runner_always: ['fail_x_a', 'pass_x_a', 'pass_x_b']",
+            "post_per_runner_always: ['fail_y_b', 'fail_y_c', 'pass_y_c']",
+            "post_per_runner_complete: ['pass_x_a', 'pass_x_b']",
+            "post_per_runner_complete: ['pass_y_c']",
+            "post_per_runner_failed: ['fail_x_a']",
+            "post_per_runner_failed: ['fail_y_b', 'fail_y_c']",
+            "post_per_sample_always: ['pass_x_a']",
+            "post_per_sample_always: ['pass_x_b']",
+            "post_per_sample_always: ['pass_y_c']",
+            "post_per_sample_always: ['fail_x_a']",
+            "post_per_sample_always: ['fail_y_b']",
+            "post_per_sample_always: ['fail_y_c']",
+            "post_per_sample_complete: ['pass_x_a']",
+            "post_per_sample_complete: ['pass_x_b']",
+            "post_per_sample_complete: ['pass_y_c']",
+            "post_per_sample_failed: ['fail_x_a']",
+            "post_per_sample_failed: ['fail_y_b']",
+            "post_per_sample_failed: ['fail_y_c']",
+            "post_failed: ['fail_x_a', 'fail_y_b', 'fail_y_c']",
+            "post_complete: ['pass_x_a', 'pass_x_b', 'pass_y_c']",
+            "post_always: ['fail_x_a', 'fail_y_b', 'fail_y_c', 'pass_x_a', 'pass_x_b', 'pass_y_c']",
         )
 
     @mark.override(

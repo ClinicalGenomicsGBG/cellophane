@@ -1,11 +1,12 @@
 """Runners for executing functions as jobs."""
 
-import time
-from functools import partial, reduce
+from functools import partial
 from logging import LoggerAdapter, getLogger
-from multiprocessing import Queue
+from multiprocessing import Lock, Queue
+from multiprocessing.synchronize import Lock as LockType
 from pathlib import Path
-from typing import Callable, Sequence
+from typing import Any, Callable, Sequence
+from uuid import UUID
 
 from mpire import WorkerPool
 from mpire.exception import InterruptWorker
@@ -18,7 +19,9 @@ from cellophane.executors import Executor
 from cellophane.logs import handle_warnings, redirect_logging_to_queue
 from cellophane.util import Timestamp
 
+from .callbacks import runner_callback
 from .checkpoint import Checkpoints
+from .hook import Hook, run_hooks
 
 
 class Runner:
@@ -63,7 +66,8 @@ class Runner:
         executor_cls: type[Executor],
         timestamp: Timestamp,
         workdir: Path,
-        checkpoints: Checkpoints | None = None,
+        hooks: Sequence[Hook],
+        group: Any,
     ) -> tuple[Samples, DeferredCleaner]:
         handle_warnings()
         redirect_logging_to_queue(log_queue)
@@ -71,6 +75,20 @@ class Runner:
         workdir.mkdir(parents=True, exist_ok=True)
         logger = LoggerAdapter(getLogger(), {"label": self.label})
         cleaner = DeferredCleaner(root=workdir)
+
+        samples = run_hooks(
+            hooks,
+            when="pre",
+            per="runner",
+            samples=samples,
+            config=config,
+            root=root,
+            executor_cls=executor_cls,
+            log_queue=log_queue,
+            timestamp=timestamp,
+            cleaner=cleaner,
+            logger=logger,
+        )
 
         with executor_cls(
             config=config,
@@ -94,7 +112,12 @@ class Runner:
                     workdir=workdir,
                     executor=executor,
                     cleaner=cleaner,
-                    checkpoints=checkpoints,
+                    checkpoints=Checkpoints(
+                        samples=samples,
+                        prefix=f"runner.{self.name}.{group}" if group is not None else f"runner.{self.name}",
+                        workdir=workdir,
+                        config=config,
+                    )
                 ):
                     case None:
                         logger.debug("Runner did not return any samples")
@@ -138,6 +161,21 @@ class Runner:
             cleaner.unregister(workdir)
         for sample in samples.failed:
             logger.debug(f"Sample {sample.id} failed - {sample.failed}")
+
+        samples = run_hooks(
+            hooks,
+            when="post",
+            per="runner",
+            samples=samples,
+            config=config,
+            root=root,
+            executor_cls=executor_cls,
+            log_queue=log_queue,
+            timestamp=timestamp,
+            cleaner=cleaner,
+            logger=logger,
+            checkpoint_suffix=f"runner_{self.name}",
+        )
 
         return samples, cleaner
 
@@ -189,10 +227,10 @@ def _cleanup(
             proc.kill()
             proc.wait()
 
-
 def start_runners(
     *,
     runners: Sequence[Runner],
+    hooks: Sequence[Hook],
     samples: Samples,
     logger: LoggerAdapter,
     log_queue: Queue,
@@ -227,6 +265,10 @@ def start_runners(
             sample.fail("Sample was not processed")
         return samples
 
+    result_samples = samples.__class__()
+    sample_runner_count: dict[UUID, int] = {}
+    callback_locks: list[LockType] = []
+
     with WorkerPool(
         use_dill=True,
         daemon=False,
@@ -234,8 +276,7 @@ def start_runners(
         shared_objects=log_queue,
     ) as pool:
         try:
-            results = []
-            samples_: Samples
+
             for runner_, group, samples_ in (
                 (r, g, s)
                 for r in runners
@@ -246,8 +287,15 @@ def start_runners(
                 workdir = config.workdir / config.tag / runner_.label
                 if runner_.split_by is not None:
                     workdir /= str(group or "unknown")
-
-                result = pool.apply_async(
+                for sample in samples_:
+                    if sample.uuid not in sample_runner_count:
+                        sample_runner_count[sample.uuid] = 1
+                    else:
+                        sample_runner_count[sample.uuid] += 1
+                callback_lock = Lock()
+                callback_lock.acquire()
+                callback_locks.append(callback_lock)
+                pool.apply_async(
                     runner_,
                     kwargs={
                         "config": config,
@@ -256,15 +304,27 @@ def start_runners(
                         "executor_cls": executor_cls,
                         "timestamp": timestamp,
                         "workdir": workdir,
-                        "checkpoints": Checkpoints(
-                            samples=samples_,
-                            prefix=f"runner.{runner_.name}.{group}" if group else f"runner.{runner_.name}",
-                            workdir=workdir,
-                            config=config,
-                        )
+                        "hooks": hooks,
+                        "group": group,
                     },
+                    callback=partial(
+                        runner_callback,
+                        logger=logger,
+                        samples=result_samples,
+                        sample_runner_count=sample_runner_count,
+                        cleaner=cleaner,
+                        pool=pool,
+                        hooks=hooks,
+                        config=config,
+                        root=root,
+                        executor_cls=executor_cls,
+                        timestamp=timestamp,
+                        lock=callback_lock
+                    ),
                 )
-                results.append(result)
+
+            for lock in callback_locks:
+                lock.acquire()
             pool.stop_and_join()
         except KeyboardInterrupt:
             logger.critical("Received SIGINT, telling runners to shut down...")
@@ -274,18 +334,4 @@ def start_runners(
             logger.critical(f"Unhandled exception in runner: {exc!r}")
             pool.terminate()
 
-    try:
-        cleaners: Sequence[DeferredCleaner]
-        samples_, cleaners = zip(*(r.get() for r in results))
-        samples_ = reduce(lambda a, b: a & b, iter(samples_))
-        for cleaner_ in cleaners:
-            cleaner &= cleaner_
-    except Exception as exc:  # pylint: disable=broad-except
-        logger.critical(
-            f"Unhandled exception when collecting results: {exc!r}",
-            exc_info=True,
-        )
-        for sample in samples.unprocessed:
-            sample.fail("Sample was not processed")
-        return samples
-    return samples_
+    return result_samples if len(result_samples) > 0 else samples

@@ -54,6 +54,7 @@ def _showwarning(showwarning_orig: Callable) -> Callable:
             func=stack[2].function,
             args=(),
             exc_info=None,
+            extra={"label": "warnings"},
         )
         logger.handle(record)
 

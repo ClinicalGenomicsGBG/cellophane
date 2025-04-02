@@ -63,6 +63,7 @@ class Runner:
         executor_cls: type[Executor],
         timestamp: Timestamp,
         workdir: Path,
+        checkpoints: Checkpoints | None = None,
     ) -> tuple[Samples, DeferredCleaner]:
         handle_warnings()
         redirect_logging_to_queue(log_queue)
@@ -93,12 +94,7 @@ class Runner:
                     workdir=workdir,
                     executor=executor,
                     cleaner=cleaner,
-                    checkpoints=Checkpoints(
-                        samples=samples,
-                        prefix=f"runner.{self.name}",
-                        workdir=workdir,
-                        config=config,
-                    ),
+                    checkpoints=checkpoints,
                 ):
                     case None:
                         logger.debug("Runner did not return any samples")
@@ -260,6 +256,12 @@ def start_runners(
                         "executor_cls": executor_cls,
                         "timestamp": timestamp,
                         "workdir": workdir,
+                        "checkpoints": Checkpoints(
+                            samples=samples_,
+                            prefix=f"runner.{runner_.name}.{group}" if group else f"runner.{runner_.name}",
+                            workdir=workdir,
+                            config=config,
+                        )
                     },
                 )
                 results.append(result)

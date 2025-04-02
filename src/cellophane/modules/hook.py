@@ -98,6 +98,7 @@ class Hook:
         log_queue: Queue,
         timestamp: Timestamp,
         cleaner: Cleaner,
+        checkpoints: Checkpoints,
     ) -> Samples:
         logger = LoggerAdapter(getLogger(), {"label": self.label})
         logger.debug(f"Running {self.label} hook")
@@ -116,12 +117,7 @@ class Hook:
                 workdir=_workdir,
                 executor=executor,
                 cleaner=cleaner,
-                checkpoints=Checkpoints(
-                    samples=samples,
-                    prefix=f"{self.when}-hook.{self.name}",
-                    workdir=config.workdir / config.tag,
-                    config=config,
-                ),
+                checkpoints=checkpoints,
             ):
                 case returned if isinstance(returned, Samples):
                     _ret = returned
@@ -180,6 +176,7 @@ def run_hooks(
     timestamp: Timestamp,
     cleaner: Cleaner | DeferredCleaner,
     logger: LoggerAdapter,
+    checkpoint_suffix: str | None = None,
 ) -> Samples:
     """Run hooks at the specified time and update the samples object.
 
@@ -198,6 +195,9 @@ def run_hooks(
     samples_ = deepcopy(samples)
 
     for hook in [h for h in hooks if (h.when, h.per) == (when, per)]:
+        checkpoint_prefix = f"{when}-hook.{hook.name}"
+        if checkpoint_suffix:
+            checkpoint_prefix += f".{checkpoint_suffix}"
         hook_ = partial(
             hook,
             config=config,
@@ -206,6 +206,12 @@ def run_hooks(
             log_queue=log_queue,
             timestamp=timestamp,
             cleaner=cleaner,
+            checkpoints=Checkpoints(
+                samples=samples,
+                prefix=checkpoint_prefix,
+                workdir=config.workdir / config.tag,
+                config=config,
+            ),
         )
         if hook.when == "pre":
             # Catch exceptions to allow post-hooks to run even if a pre-hook fails

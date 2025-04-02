@@ -1,12 +1,11 @@
 """Runners for executing functions as jobs."""
 
-import time
 from functools import partial
 from logging import LoggerAdapter, getLogger
 from multiprocessing import Lock, Queue
 from multiprocessing.synchronize import Lock as LockType
 from pathlib import Path
-from typing import Callable, Sequence
+from typing import Any, Callable, Sequence
 from uuid import UUID
 
 from mpire import WorkerPool
@@ -68,7 +67,7 @@ class Runner:
         timestamp: Timestamp,
         workdir: Path,
         hooks: Sequence[Hook],
-        checkpoints: Checkpoints,
+        group: Any,
     ) -> tuple[Samples, DeferredCleaner]:
         handle_warnings()
         redirect_logging_to_queue(log_queue)
@@ -113,7 +112,12 @@ class Runner:
                     workdir=workdir,
                     executor=executor,
                     cleaner=cleaner,
-                    checkpoints=checkpoints,
+                    checkpoints=Checkpoints(
+                        samples=samples,
+                        prefix=f"runner.{self.name}.{group}" if group is not None else f"runner.{self.name}",
+                        workdir=workdir,
+                        config=config,
+                    )
                 ):
                     case None:
                         logger.debug("Runner did not return any samples")
@@ -170,6 +174,7 @@ class Runner:
             timestamp=timestamp,
             cleaner=cleaner,
             logger=logger,
+            checkpoint_suffix=f"runner_{self.name}",
         )
 
         return samples, cleaner
@@ -300,12 +305,7 @@ def start_runners(
                         "timestamp": timestamp,
                         "workdir": workdir,
                         "hooks": hooks,
-                        "checkpoints": Checkpoints(
-                            samples=samples_,
-                            prefix=f"runner.{runner_.name}.{group}" if group else f"runner.{runner_.name}",
-                            workdir=workdir,
-                            config=config,
-                        )
+                        "group": group,
                     },
                     callback=partial(
                         runner_callback,

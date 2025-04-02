@@ -16,6 +16,7 @@ from cellophane.cleanup import Cleaner, DeferredCleaner
 from cellophane.data import Samples
 from cellophane.executors import Executor
 from cellophane.logs import handle_warnings, redirect_logging_to_queue
+from cellophane.util import Timestamp
 
 from .hook import Hook, run_hooks
 
@@ -29,7 +30,7 @@ def _run_per_sample_hooks(
     config: Config,
     root: Path,
     executor_cls: type[Executor],
-    timestamp: time.struct_time,
+    timestamp: Timestamp,
 ) -> tuple[Samples, DeferredCleaner]:
     handle_warnings()
     redirect_logging_to_queue(log_queue)
@@ -48,6 +49,7 @@ def _run_per_sample_hooks(
         timestamp=timestamp,
         cleaner=cleaner,
         logger=logger,
+        checkpoint_suffix=f"sample_{samples[0].id}"
     )
 
     return _samples, cleaner

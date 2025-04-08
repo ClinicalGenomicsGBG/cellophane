@@ -39,7 +39,7 @@ class Checkpoint:
     prefix: str
     base_path: Path
     file: Path = field(init=False)
-    params: list = field(factory=list)
+    _params: list = field(factory=list)
     _cache: dict[str, str] | None = field(init=False)
     _extra_paths: set[Path] = field(factory=set)
 
@@ -100,6 +100,14 @@ class Checkpoint:
         self._samples = samples
         with suppress(AttributeError):
             del self._paths
+
+    @property
+    def params(self) -> list:
+        return self._params
+
+    @params.setter
+    def params(self, params: Any | list) -> None:
+        self._params = params if isinstance(params, list) else [params]
 
     def _hash(self, *args: Any, **kwargs: Any) -> Iterator[tuple[str, str]]:
         """Generate a hash for the samples.

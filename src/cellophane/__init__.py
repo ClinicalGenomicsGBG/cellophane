@@ -6,7 +6,15 @@ from .cfg import Config, Schema
 from .cleanup import Cleaner
 from .data import Container, Output, OutputGlob, Sample, Samples
 from .executors import Executor
-from .modules import Checkpoint, Checkpoints, output, post_hook, pre_hook, runner
+from .modules import (
+    Checkpoint,
+    Checkpoints,
+    output,
+    post_hook,
+    pre_hook,
+    runner,
+    stage,
+)
 from .util import Timestamp
 
 __all__ = [
@@ -24,6 +32,7 @@ __all__ = [
     "post_hook",
     "pre_hook",
     "runner",
+    "stage",
     # data
     "Output",
     "OutputGlob",

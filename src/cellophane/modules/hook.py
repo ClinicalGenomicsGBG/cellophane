@@ -1,4 +1,3 @@
-import time
 from copy import deepcopy
 from functools import partial
 from graphlib import TopologicalSorter
@@ -16,15 +15,52 @@ from cellophane.executors import Executor
 from cellophane.util import Timestamp
 
 from .checkpoint import Checkpoints
+from .deps import DEPENDENCY, _internal
 
 
-class _AFTER_ALL: ...
+def _organize_internal(
+    before: DEPENDENCY | list[DEPENDENCY] | None,
+    after: DEPENDENCY | list[DEPENDENCY] | None,
+) -> tuple[list[DEPENDENCY], list[DEPENDENCY]]:
+    match before or [], after or []:
+        # Check if both before and after are empty
+        case [[], []]:
+            return [], []
 
+        # Ensure that all dependencies are lists
+        case b, a if not isinstance(b, list):
+            return _organize_internal([b], a)
+        case b, a if not isinstance(a, list):
+            return _organize_internal(b, [a])
 
-class _BEFORE_ALL: ...
+        # Replace "all" with _internal.ALL
+        case [["all", *b] | [*b, "all"], a]:
+            return _organize_internal([_internal.ALL, *b], a)
+        case b, ["all", *a] | [*a, "all"]:
+            return _organize_internal(b, [*a, _internal.ALL])
 
+        # Replace _internal.ALL with BEFORE_ALL or AFTER_ALL
+        case [[_internal.ALL, *b] | [*b, _internal.ALL], a]:
+            return _organize_internal([*b, _internal.BEFORE_ALL], a)
+        case b, [_internal.ALL, *a] | [*a, _internal.ALL]:
+            return _organize_internal(b, [*a, _internal.AFTER_ALL])
 
-DEPENDENCY_TYPE = str | list[type[_BEFORE_ALL] | type[_AFTER_ALL] | str] | None
+        # Check if before and after are already lists
+        case b, a if not all(isinstance(i, (str, _internal)) for i in {*b, *a}):
+            raise ValueError(f"{before=}, {after=}")
+
+        # Ensure hooks run between BEFORE_ALL and AFTER_ALL unless otherwise specified
+        case b, a if not {_internal.BEFORE_ALL, _internal.AFTER_ALL} & {*a, *b}:
+            return _organize_internal(
+                [*b, _internal.AFTER_ALL], [*a, _internal.BEFORE_ALL]
+            )
+
+        # Check if before and after are already valid
+        case list(b), list(a) if all(isinstance(d, (str, _internal)) for d in {*b, *a}):
+            return b, a
+
+    # If we reach here, the dependencies are not valid
+    raise ValueError(f"{before=}, {after=}")
 
 
 class Hook:
@@ -35,8 +71,8 @@ class Hook:
     func: Callable
     when: Literal["pre", "post"]
     condition: Literal["always", "complete", "failed"]
-    before: DEPENDENCY_TYPE
-    after: DEPENDENCY_TYPE
+    before: list[DEPENDENCY]
+    after: list[DEPENDENCY]
     per: Literal["session", "sample", "runner"] = "session"
 
     def __init__(
@@ -45,40 +81,14 @@ class Hook:
         when: Literal["pre", "post"],
         label: str | None = None,
         condition: Literal["always", "complete", "failed"] = "always",
-        before: DEPENDENCY_TYPE = None,
-        after: DEPENDENCY_TYPE = None,
+        before: DEPENDENCY | list[DEPENDENCY] | None = None,
+        after: DEPENDENCY | list[DEPENDENCY] | None = None,
         per: Literal["session", "sample", "runner"] = "session",
     ) -> None:
-        if isinstance(before, str) and before != "all":
-            before = [before]
-        elif before is None:
-            before = []
-
-        if isinstance(after, str) and after != "all":
-            after = [after]
-        elif after is None:
-            after = []
-
-        match before, after:
-            case "all", list(after):
-                self.before = [_BEFORE_ALL]
-                self.after = after
-            case list(before), "all":
-                self.before = before
-                self.after = [_AFTER_ALL]
-            case list(before), list(after) if "all" in before and "all" not in after:
-                self.before = [_BEFORE_ALL, *before]
-                self.before.remove("all")
-                self.after = after
-            case list(before), list(after) if "all" not in before and "all" in after:
-                self.before = before
-                self.after = [*after, _AFTER_ALL]
-                self.after.remove("all")
-            case list(before), list(after) if "all" not in before and "all" not in after:
-                self.before = [*before, _AFTER_ALL]
-                self.after = [*after, _BEFORE_ALL]
-            case _:
-                raise ValueError(f"{func.__name__}: {before=}, {after=}")
+        try:
+            self.before, self.after = _organize_internal(before, after)
+        except ValueError as exc:
+            raise ValueError(f"{func.__name__}: {exc}") from exc
         self.__name__ = func.__name__
         self.__qualname__ = func.__qualname__
         self.__module__ = func.__module__
@@ -130,9 +140,7 @@ class Hook:
         return _ret
 
 
-def resolve_dependencies(
-    hooks: list[Hook],
-) -> list[Hook]:
+def resolve_dependencies(hooks: list[Hook]) -> list[Hook]:
     """Resolves hook dependencies and returns the hooks in the resolved order.
     Uses a topological sort to resolve dependencies. If the order of two hooks
     cannot be determined, the order is not guaranteed.
@@ -148,18 +156,31 @@ def resolve_dependencies(
         list[Hook]: The hooks in the resolved order.
 
     """
-    deps = {
-        name: {
-            *[d for h in hooks if h.__name__ == name for d in h.after],
-            *[h.__name__ for h in hooks if name in h.before],
-        }
-        for name in {
-            *[n for h in hooks for n in h.before + h.after],
-            *[h.__name__ for h in hooks],
-        }
-    }
+    # Initialize the graph with the internal stage order
+    graph: dict[DEPENDENCY, set[DEPENDENCY]] = _internal.order()
 
-    order = [*TopologicalSorter(deps).static_order()]
+    for hook in hooks:
+        hook_phase = _internal.PRE if hook.when == "pre" else _internal.POST
+        # Add the hook to the graph
+        if hook.__name__ not in graph:
+            graph[hook.__name__] = set()
+
+        # Add the dependencies to the hook node
+        for dependency in hook.after:
+            if isinstance(dependency, _internal):
+                dependency = hook_phase | dependency
+            graph[hook.__name__].add(dependency)
+
+        # Add the hook to the any node that depends on it, creating nodes as needed
+        for dependency in hook.before:
+            if isinstance(dependency, _internal):
+                dependency = hook_phase | dependency
+            if dependency not in graph:
+                graph[dependency] = set()
+            graph[dependency].add(hook.__name__)
+
+    # Sort the hooks in topological order
+    order = [*TopologicalSorter(graph).static_order()]
     return [*sorted(hooks, key=lambda h: order.index(h.__name__))]
 
 

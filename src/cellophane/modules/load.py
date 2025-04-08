@@ -102,7 +102,10 @@ def load(root: Path) -> MODULE_CONTENTS:
             executors_,
         ) = aio.run(_gather_module_contents(root))
     try:
-        hooks = resolve_dependencies(hooks)
+        hooks = [
+            *resolve_dependencies([h for h in hooks if h.when == "pre"]),
+            *resolve_dependencies([h for h in hooks if h.when == "post"]),
+        ]
     except Exception as exc:  # pylint: disable=broad-except
         raise ImportError(f"Unable to resolve hook dependencies: {exc!r}") from exc
 

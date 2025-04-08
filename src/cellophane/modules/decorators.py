@@ -3,7 +3,7 @@ from typing import Any, Callable, Literal
 
 from cellophane import data
 
-from .hook import DEPENDENCY_TYPE, Hook
+from .hook import DEPENDENCY, Hook
 from .runner_ import Runner
 
 
@@ -97,8 +97,8 @@ def runner(
 def pre_hook(
     label: str | None = None,
     per: Literal["session", "runner"] = "session",
-    before: DEPENDENCY_TYPE = None,
-    after: DEPENDENCY_TYPE = None,
+    before: DEPENDENCY | list[DEPENDENCY] | None = None,
+    after: DEPENDENCY | list[DEPENDENCY] | None = None,
 ) -> Callable:
     """Decorator for creating a pre-hook.
 
@@ -134,8 +134,8 @@ def post_hook(
     label: str | None = None,
     condition: Literal["always", "complete", "failed"] = "always",
     per: Literal["session", "sample", "runner"] = "session",
-    before: DEPENDENCY_TYPE = None,
-    after: DEPENDENCY_TYPE = None,
+    before: DEPENDENCY | list[DEPENDENCY] | None = None,
+    after: DEPENDENCY | list[DEPENDENCY] | None = None,
 ) -> Callable:
     """Decorator for creating a post-hook.
 

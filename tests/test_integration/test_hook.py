@@ -148,7 +148,7 @@ class Test_hooks(BaseTest):
     @mark.override(
         structure={
             "modules/a.py": """
-                from cellophane import pre_hook, Samples
+                from cellophane import pre_hook, Samples, stage
 
                 class TestSamples(Samples):
                     executed = set()
@@ -180,18 +180,18 @@ class Test_hooks(BaseTest):
                         )
                     )
 
-                @pre_hook(before="all")
+                @pre_hook(before=stage.ALL)
                 def a(samples, logger, **_):
                     assert "before_all_a" in samples.executed, hook_info(samples, msg="Expected before_all_a to be executed")
                     assert "before_all_after_a" in samples.not_executed, hook_info(samples, msg="Expected before_all_after_a to not be executed")
                     samples.executed.add("a")
 
-                @pre_hook(before=["all", "a"])
+                @pre_hook(before=[stage.ALL, "a"])
                 def before_all_a(samples, logger, **_):
                     assert not samples.executed, hook_info(samples, msg="Expected no hooks to be executed")
                     samples.executed.add("before_all_a")
 
-                @pre_hook(before="all", after="a")
+                @pre_hook(before=stage.ALL, after="a")
                 def before_all_after_a(samples, logger, **_):
                     assert "a" in samples.executed, hook_info(samples, msg="Expected 'a' to be executed")
                     samples.executed.add("before_all_after_a")
@@ -229,17 +229,17 @@ class Test_hooks(BaseTest):
                     assert {"x", "y"} <= samples.executed, hook_info(samples, msg="Expected 'x' and 'y' to be executed")
                     samples.executed.add("after_xy")
 
-                @pre_hook(after="all", before="b")
+                @pre_hook(after=stage.ALL, before="b")
                 def after_all_before_b(samples, logger, **_):
                     assert "b" not in samples.executed, hook_info(samples, msg="Expected 'b' to not be executed")
                     samples.executed.add("after_all_before_b")
 
-                @pre_hook(after=["all", "b"])
+                @pre_hook(after=[stage.ALL, "b"])
                 def after_all_b(samples, logger, **_):
                     assert "db" in samples.executed, hook_info(samples, msg="Expected 'b' to be executed")
                     samples.executed.add("after_all_b")
 
-                @pre_hook(after="all")
+                @pre_hook(after=stage.ALL)
                 def b(samples, logger, **_):
                     samples.executed.add("b")
             """,
@@ -264,6 +264,111 @@ class Test_hooks(BaseTest):
     @mark.override(
         structure={
             "modules/a.py": """
+                from cellophane import pre_hook, post_hook, Samples, stage
+                from cellophane.modules.deps import _internal
+
+                ####
+                # Pre hook order (Samples > Notifications > Files > Outputs)
+                # Reversed to ensure hooks are reordered correctly
+                ####
+                @pre_hook(after=stage.ALL)
+                def pre_after_all(samples, logger, **_): return samples
+
+                @pre_hook(after=stage.FILES_FINALIZED)
+                def pre_after_files_finalized(samples, logger, **_): return samples
+
+                @pre_hook(after=stage.OUTPUT_PRESENT, before=stage.OUTPUT_FINALIZED)
+                def pre_before_output_finalized(samples, logger, **_): return samples
+
+                @pre_hook(after=stage.FILES_FINALIZED, before=stage.OUTPUT_PRESENT)
+                def pre_before_output_present(samples, logger, **_): return samples
+
+                @pre_hook(after=stage.FILES_PRESENT, before=stage.FILES_FINALIZED)
+                def pre_before_files_finalized(samples, logger, **_): return samples
+
+                @pre_hook(after=stage.NOTIFICATIONS_SENT, before=stage.FILES_PRESENT)
+                def pre_before_files_present(samples, logger, **_): return samples
+
+                @pre_hook(after=stage.NOTIFICATIONS_FINALIZED, before=stage.NOTIFICATIONS_SENT)
+                def pre_before_notifications_sent(samples, logger, **_): return samples
+
+                @pre_hook(after=stage.SAMPLES_FINALIZED, before=stage.NOTIFICATIONS_FINALIZED)
+                def pre_before_notifications_finalized(samples, logger, **_): return samples
+
+                @pre_hook(after=stage.SAMPLES_PRESENT, before=stage.SAMPLES_FINALIZED)
+                def pre_before_samples_finalized(samples, logger, **_): return samples
+
+                @pre_hook(before=stage.SAMPLES_PRESENT)
+                def pre_before_samples_present(samples, logger, **_): return samples
+
+                @pre_hook(before=stage.ALL)
+                def pre_before_all(samples, logger, **_): return samples
+
+                ####
+                # Post hook order (Samples (finalized) > Outputs > Notifications)
+                # Reversed to ensure hooks are reordered correctly
+                ####
+
+                @post_hook(after=stage.ALL)
+                def post_after_all(samples, logger, **_): return samples
+
+                @post_hook(after=stage.NOTIFICATIONS_SENT)
+                def post_after_notifications_sent(samples, logger, **_): return samples
+
+                @post_hook(after=stage.NOTIFICATIONS_FINALIZED, before=stage.NOTIFICATIONS_SENT)
+                def post_before_notifications_sent(samples, logger, **_): return samples
+
+                @post_hook(after=stage.OUTPUT_TRANSFERED, before=stage.NOTIFICATIONS_FINALIZED)
+                def post_before_notifications_finalized(samples, logger, **_): return samples
+
+                @post_hook(after=stage.OUTPUT_FINALIZED, before=stage.OUTPUT_TRANSFERED)
+                def post_before_output_transfered(samples, logger, **_): return samples
+
+                @post_hook(after=stage.OUTPUT_PRESENT, before=stage.OUTPUT_FINALIZED)
+                def post_before_output_finalized(samples, logger, **_): return samples
+
+                @post_hook(after=stage.SAMPLES_FINALIZED, before=stage.OUTPUT_PRESENT)
+                def post_before_output_present(samples, logger, **_): return samples
+
+                @post_hook(before=stage.SAMPLES_FINALIZED)
+                def post_before_samples_finalized(samples, logger, **_): return samples
+
+                @post_hook(before=stage.ALL)
+                def post_before_all(samples, logger, **_): return samples
+            """,
+        },
+    )
+    def test_hooks_staging(self, invocation: Invocation) -> None:
+        assert invocation.logs == literal(
+            (
+                "Running pre_before_all hook\n"
+                "Running pre_before_samples_present hook\n"
+                "Running pre_before_samples_finalized hook\n"
+                "Running pre_before_notifications_finalized hook\n"
+                "Running pre_before_notifications_sent hook\n"
+                "Running pre_before_files_present hook\n"
+                "Running pre_before_files_finalized hook\n"
+                "Running pre_after_files_finalized hook\n"
+                "Running pre_before_output_present hook\n"
+                "Running pre_before_output_finalized hook\n"
+                "Running pre_after_all hook"
+            ),
+            (
+                "Running post_before_all hook\n"
+                "Running post_before_samples_finalized hook\n"
+                "Running post_before_output_present hook\n"
+                "Running post_before_output_finalized hook\n"
+                "Running post_before_output_transfered hook\n"
+                "Running post_before_notifications_finalized hook\n"
+                "Running post_before_notifications_sent hook\n"
+                "Running post_after_notifications_sent hook\n"
+                "Running post_after_all hook"
+            ),
+        )
+
+    @mark.override(
+        structure={
+            "modules/a.py": """
                 from cellophane import pre_hook
 
                 class INVALID: ...
@@ -276,7 +381,7 @@ class Test_hooks(BaseTest):
     )
     def test_invalid_hook_before(self, invocation: Invocation) -> None:
         assert invocation.logs == literal(
-            "Unable to import module 'a': ValueError(\"a: before=<class 'modules.a.INVALID'>, after=[]\")"
+            "Unable to import module 'a': ValueError(\"a: before=[<class 'modules.a.INVALID'>], after=[]\")"
         )
 
     @mark.override(
@@ -294,7 +399,7 @@ class Test_hooks(BaseTest):
     )
     def test_invalid_hook_after(self, invocation: Invocation) -> None:
         assert invocation.logs == literal(
-            "Unable to import module 'a': ValueError(\"a: before=[], after=<class 'modules.a.INVALID'>\")"
+            "Unable to import module 'a': ValueError(\"a: before=[], after=[<class 'modules.a.INVALID'>]\")"
         )
 
     @mark.override(

@@ -63,6 +63,13 @@ branch = false
 [tool.coverage.report]
 omit = ["**/pytest-*/*"]
 
+
+
+[project.scripts]
+cellophane = "cellophane.dev:main"
+
+
+
 [tool.ruff]
 line-length = 88
 

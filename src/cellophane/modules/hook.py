@@ -15,48 +15,244 @@ from cellophane.executors import Executor
 from cellophane.util import Timestamp
 
 from .checkpoint import Checkpoints
-from .deps import DEPENDENCY, _internal
+from .deps import DEPENDENCY, _flag, stage
 
 
-def _organize_internal(
+def _get_hook_by_name(name: str, hooks: list["Hook"]) -> "Hook | None":
+    return next((h for h in hooks if h.name == name), None)
+
+
+def _get_next_hook(hook: "Hook", hooks: list["Hook"]) -> tuple["Hook", DEPENDENCY | None]:
+    """Get the next named hook in the dependency chain."""
+    # _flags = {f for f in hook.before if isinstance(f, _flag) and not _flag.ALL & f}
+    _hooks = {h for h in hooks if h.name in hook.before and h.name != hook.name}
+
+    _hook: "Hook" = hook
+    _min: DEPENDENCY | None = None
+    for dep in _hooks:
+        _, _dep_min = _get_next_hook(dep, hooks)
+        if _min is None or (_dep_min is not None and _dep_min < _min):
+            _hook, _min = dep, _dep_min
+
+    return _hook, _min
+
+def _get_prev_hook(hook: "Hook", hooks: list["Hook"]) -> tuple["Hook | None", DEPENDENCY | None]:
+    """Get the last named hook in the dependency chain."""
+    # _flags = {f for f in hook.after if isinstance(f, _flag) and not _flag.ALL & f}
+    _hooks = {h for h in hooks if h.name in hook.after and h.name != hook.name}
+
+    _hook: "Hook | None" = None
+    _max: DEPENDENCY | None = None
+    for dep in _hooks:
+        _, _dep_max = _get_prev_hook(dep, hooks)
+        if _max is None or (_dep_max is not None and _dep_max > _max):
+            _hook, _max = dep, _dep_max
+
+    return _hook, _max
+
+
+def before(hook: "Hook", hooks: list["Hook"]) -> tuple[set[_flag], set[str]]:
+    _flags = set()
+    _names = set()
+    for d in hook.before:
+        if isinstance(d, _flag) and _flag.ALL not in d:
+            _flags.add(d)
+        elif isinstance(d, str) and (h := _get_hook_by_name(d, hooks)) is not None:
+            _names.add(d)
+            if any(b := before(h, hooks)):
+                _flags |= b[0]
+                _names |= b[1]
+    if not _flags and not _names and any(a := after(hook, hooks)):
+        _flags.add(max(a[0]).next())
+        # for n in a[1]:
+        #     if (h := _get_hook_by_name(n, hooks)) is not None:
+        #         _names |= {n for n in before(h, hooks)[1] if n not in a[1]}
+    return _flags, _names
+
+
+def after(hook: "Hook", hooks: list["Hook"]) -> tuple[set[_flag], set[str]]:
+    _flags = set()
+    _names = set()
+    for d in hook.after:
+        if isinstance(d, _flag) and _flag.ALL not in d:
+            _flags.add(d)
+        elif isinstance(d, str) and (h := next((h for h in hooks if h.name == d), None)) is not None:
+            _names.add(d)
+            if any(a := after(h, hooks)):
+                _flags |= a[0]
+                _names |= a[1]
+    if not _flags and any(b := before(hook, hooks)):
+        _flags.add(min(b[0]).previous())
+        # for n in b[1]:
+        #     if (h := _get_hook_by_name(n, hooks)) is not None:
+        #         _names |= {n for n in after(h, hooks)[1] if n not in b[1]}
+
+    return _flags, _names
+
+
+def _insert_neighbor_stages(hooks: list["Hook"]) -> list["Hook"]:
+    import logging
+    _hooks = hooks.copy()
+    for hook in _hooks:
+        _b_flags, _b_names = before(hook, hooks)
+        _a_flags, _a_names = after(hook, hooks)
+        hook.before = [*{*hook.before, *_b_flags, *_b_names}]
+        hook.after = [*{*hook.after, *_a_flags, *_a_names}]
+
+        logging.debug(f"--- Hook {hook.__name__} ---")
+        logging.debug("--- before ---")
+        for b in hook.before:
+            logging.debug(f"{b!r}")
+        logging.debug("--- after ---")
+        for a in hook.after:
+            logging.debug(f"{a!r}")
+        logging.debug("\n")
+
+    return hooks
+
+
+# node='pre_before_all' deps=set()
+# node='pre_before_samples_init' deps={
+#   BEFORE|PRE|ALL,
+#   "pre_before_all"
+# }
+# node='pre_before_notifications_init' deps={
+#   BEFORE|PRE|ALL,
+#   "pre_before_all",
+#   BEFORE|PRE|SAMPLES_INIT,
+#   "pre_before_samples_init"
+#   AFTER|PRE|SAMPLES_INIT,
+# }
+# node='pre_before_notifications_sent' deps={
+#   BEFORE|PRE|ALL,
+#   "pre_before_all",
+#   BEFORE|PRE|SAMPLES_INIT,
+#   "pre_before_samples_init",
+#   AFTER|PRE|SAMPLES_INIT,
+#   BEFORE|PRE|NOTIFICATIONS_INIT,
+#   "pre_before_notifications_init"
+#   AFTER|PRE|NOTIFICATIONS_INIT,
+# }
+# node='pre_before_files_init' deps={
+#   BEFORE|PRE|ALL
+#   "pre_before_all",
+#   BEFORE|PRE|SAMPLES_INIT,
+#   "pre_before_samples_init",
+#   AFTER|PRE|SAMPLES_INIT,
+#   BEFORE|PRE|NOTIFICATIONS_INIT,
+#   "pre_before_notifications_init",
+#   AFTER|PRE|NOTIFICATIONS_INIT,
+#   BEFORE|PRE|NOTIFICATIONS_SENT,
+#   "pre_before_notifications_sent"
+#   AFTER|PRE|NOTIFICATIONS_SENT,
+# }
+# node='pre_before_output_init' deps={
+#   BEFORE|PRE|ALL
+#  "pre_before_all",
+ #   BEFORE|PRE|SAMPLES_INIT,
+#   "pre_before_samples_init",
+#   AFTER|PRE|SAMPLES_INIT,
+#   BEFORE|PRE|NOTIFICATIONS_INIT,
+#   "pre_before_notifications_init",
+#   AFTER|PRE|NOTIFICATIONS_INIT,
+#   BEFORE|PRE|NOTIFICATIONS_SENT,
+#   "pre_before_notifications_sent",
+#   AFTER|PRE|NOTIFICATIONS_SENT,
+#   BEFORE|PRE|FILES_INIT,
+#   "pre_before_files_init"
+#   AFTER|PRE|FILES_INIT,
+# }
+# node='pre_after_output_init' deps={
+#   BEFORE|PRE|ALL
+#   "pre_before_all",
+#   BEFORE|PRE|SAMPLES_INIT,
+#   "pre_before_samples_init",
+#   AFTER|PRE|SAMPLES_INIT,
+#   BEFORE|PRE|NOTIFICATIONS_INIT,
+#   "pre_before_notifications_init",
+#   AFTER|PRE|NOTIFICATIONS_INIT,
+#   BEFORE|PRE|NOTIFICATIONS_SENT,
+#   "pre_before_notifications_sent",
+#   AFTER|PRE|NOTIFICATIONS_SENT,
+#   BEFORE|PRE|FILES_INIT,
+#   "pre_before_files_init",
+#   AFTER|PRE|FILES_INIT,
+#   BEFORE|PRE|OUTPUT_INIT,
+#   "pre_before_output_init"
+#   AFTER|PRE|OUTPUT_INIT,
+# }
+# node='pre_after_all' deps={
+#   BEFORE|PRE|ALL,
+#   "pre_before_all",
+#   BEFORE|PRE|SAMPLES_INIT,
+#   "pre_before_samples_init",
+#   AFTER|PRE|SAMPLES_INIT,
+#   BEFORE|PRE|NOTIFICATIONS_INIT,
+#   "pre_before_notifications_init",
+#   AFTER|PRE|NOTIFICATIONS_INIT,
+#   BEFORE|PRE|NOTIFICATIONS_SENT,
+#   "pre_before_notifications_sent",
+#   AFTER|PRE|NOTIFICATIONS_SENT,
+#   BEFORE|PRE|FILES_INIT,
+#   "pre_before_files_init",
+#   AFTER|PRE|FILES_INIT,
+#   BEFORE|PRE|OUTPUT_INIT,
+#   "pre_before_output_init",
+#   AFTER|PRE|OUTPUT_INIT,
+#   "pre_after_output_init"
+#   AFTER|PRE|FILES_INIT,
+#   AFTER|PRE|ALL
+# }
+
+def _update_before_after(
     before: DEPENDENCY | list[DEPENDENCY] | None,
     after: DEPENDENCY | list[DEPENDENCY] | None,
+    phase: Literal["pre", "post"],
 ) -> tuple[list[DEPENDENCY], list[DEPENDENCY]]:
+    match phase:
+        case "pre":
+            _phase = _flag.PRE
+        case "post":
+            _phase = _flag.POST
+        case _:
+            raise ValueError(f"Invalid phase: {phase}")
+
     match before or [], after or []:
         # Check if both before and after are empty
         case [[], []]:
             return [], []
 
-        # Ensure that all dependencies are lists
+        # Ensure that before and after are lists
         case b, a if not isinstance(b, list):
-            return _organize_internal([b], a)
+            return _update_before_after([b], a, phase)
         case b, a if not isinstance(a, list):
-            return _organize_internal(b, [a])
+            return _update_before_after(b, [a], phase)
 
-        # Replace "all" with _internal.ALL
-        case [["all", *b] | [*b, "all"], a]:
-            return _organize_internal([_internal.ALL, *b], a)
-        case b, ["all", *a] | [*a, "all"]:
-            return _organize_internal(b, [*a, _internal.ALL])
-
-        # Replace _internal.ALL with BEFORE_ALL or AFTER_ALL
-        case [[_internal.ALL, *b] | [*b, _internal.ALL], a]:
-            return _organize_internal([*b, _internal.BEFORE_ALL], a)
-        case b, [_internal.ALL, *a] | [*a, _internal.ALL]:
-            return _organize_internal(b, [*a, _internal.AFTER_ALL])
-
-        # Check if before and after are already lists
-        case b, a if not all(isinstance(i, (str, _internal)) for i in {*b, *a}):
+        # Check that all dependencies are valid types
+        case b, a if not all(isinstance(i, (str, _flag)) for i in {*b, *a}):
             raise ValueError(f"{before=}, {after=}")
 
-        # Ensure hooks run between BEFORE_ALL and AFTER_ALL unless otherwise specified
-        case b, a if not {_internal.BEFORE_ALL, _internal.AFTER_ALL} & {*a, *b}:
-            return _organize_internal(
-                [*b, _internal.AFTER_ALL], [*a, _internal.BEFORE_ALL]
-            )
+        # Replace "all" with _flag.ALL
+        case [["all", *b] | [*b, "all"], a]:
+            return _update_before_after([_flag.ALL, *b], a, phase)
+        case b, ["all", *a] | [*a, "all"]:
+            return _update_before_after(b, [*a, _flag.ALL], phase)
 
-        # Check if before and after are already valid
-        case list(b), list(a) if all(isinstance(d, (str, _internal)) for d in {*b, *a}):
+        # Add PRE or POST and  BEFORE or AFTER flags to the dependencies
+        case [[flag, *b], a] if flag in stage.values() and isinstance(flag, _flag):
+            return _update_before_after([_phase | _flag.BEFORE | flag, *b], a, phase)
+        case b, [flag, *a] if flag in stage.values() and isinstance(flag, _flag):
+            return _update_before_after(b, [*a, _phase | _flag.AFTER | flag], phase)
+
+        # Ensure hook runs between before/after all
+        case b, a if _phase | _flag.BEFORE | _flag.ALL not in [*b, *a]:
+            _after = [*a, _phase | _flag.BEFORE | _flag.ALL]
+            return _update_before_after(b, _after, phase)
+        case b, a if _phase | _flag.AFTER | _flag.ALL not in [*b, *a]:
+            _before = [*b, _phase | _flag.AFTER | _flag.ALL]
+            return _update_before_after(_before, a, phase)
+
+        case [[*b], [*a]]:
             return b, a
 
     # If we reach here, the dependencies are not valid
@@ -86,7 +282,7 @@ class Hook:
         per: Literal["session", "sample", "runner"] = "session",
     ) -> None:
         try:
-            self.before, self.after = _organize_internal(before, after)
+            self.before, self.after = _update_before_after(before, after, phase=when)
         except ValueError as exc:
             raise ValueError(f"{func.__name__}: {exc}") from exc
         self.__name__ = func.__name__
@@ -157,28 +353,22 @@ def resolve_dependencies(hooks: list[Hook]) -> list[Hook]:
 
     """
     # Initialize the graph with the internal stage order
-    graph: dict[DEPENDENCY, set[DEPENDENCY]] = _internal.order()
+    graph: dict = _flag.graph()
+    _insert_neighbor_stages(hooks)
 
     for hook in hooks:
-        hook_phase = _internal.PRE if hook.when == "pre" else _internal.POST
         # Add the hook to the graph
         if hook.__name__ not in graph:
             graph[hook.__name__] = set()
 
         # Add the dependencies to the hook node
-        for dependency in hook.after:
-            if isinstance(dependency, _internal):
-                dependency = hook_phase | dependency
-            graph[hook.__name__].add(dependency)
+        graph[hook.__name__] |= {*hook.after}
 
         # Add the hook to the any node that depends on it, creating nodes as needed
         for dependency in hook.before:
-            if isinstance(dependency, _internal):
-                dependency = hook_phase | dependency
             if dependency not in graph:
                 graph[dependency] = set()
             graph[dependency].add(hook.__name__)
-
     # Sort the hooks in topological order
     order = [*TopologicalSorter(graph).static_order()]
     return [*sorted(hooks, key=lambda h: order.index(h.__name__))]

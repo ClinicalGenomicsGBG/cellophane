@@ -141,7 +141,7 @@ def cellophane(label: str, root: Path) -> click.Command:
             log_listener.stop()
 
     except Exception as exc:
-        logger.critical(exc)
+        logger.critical(exc, exc_info=True)
         raise SystemExit(1) from exc
 
     return inner

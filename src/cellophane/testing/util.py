@@ -78,6 +78,11 @@ class regex:
             if not other.is_file():
                 raise ValueError("Path must be a file")
             return other.read_text() != self
+        elif isinstance(other, Iterable) and not isinstance(other, str):
+            return self != "\n".join(other)
+        elif not isinstance(other, str):
+            return self != repr(other)
+
         return any(pattern.search(other) is None for pattern in self.patterns)
 
 

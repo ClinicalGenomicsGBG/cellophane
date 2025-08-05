@@ -2,6 +2,7 @@ import logging
 import re
 import sys
 from pathlib import Path
+from traceback import format_exception
 from typing import Any, Iterable
 
 import pytest
@@ -40,9 +41,10 @@ def pytest_runtest_makereport(
     # but this is paraphrased from the pytest docs
     report: pytest.TestReport = yield  # type: ignore[misc, assignment]
     if invocation_ := item.funcargs.get("invocation"):
+        _traceback = "".join(format_exception(invocation_.exception))
         report.sections.append(("Args", " ".join(invocation_.args)))
         report.sections.append(("stdout/stderr", invocation_.output))
-        report.sections.append(("Exception", repr(invocation_.exception)))
+        report.sections.append(("Exception", _traceback))
     return report
 
 

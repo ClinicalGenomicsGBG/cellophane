@@ -391,3 +391,82 @@ class Test_parse_config(BaseTest):
             r"mapping_array: .* = \[{'a': 'a'}, {'b': {'c': {'d': 'd'}}}\]",
             r"mapping: .* = {'a': 'a', 'b': 1, 'c': 1.0, 'd': {'e': 'e', 'f': 42}}"
         )
+
+    @mark.override(
+        structure={
+            **structure,
+            "schema.yaml": """
+            properties:
+              value_a:
+                type: string
+                default: "DEFAULT_A"
+              value_b:
+                type: integer
+                default: 0
+              value_c:
+                type: number
+                default: 0.0
+              list:
+                type: array
+                items:
+                  type: string
+              nested:
+                type: object
+                properties:
+                  shallow_node:
+                    type: mapping
+                  deep:
+                    type: object
+                    properties:
+                      str_node:
+                        type: string
+                      list_node:
+                        type: array
+                        items:
+                          type: string
+            """,
+            "path/to/config.yaml": """
+                !include:include_a.yaml,include_b.yaml
+                nested:
+                  shallow_node: !include:include_d.yaml
+            """,
+            "path/to/include_a.yaml": """
+                value_a: "A"
+                list: ["x", "y"]
+            """,
+            "path/to/include_b.yaml": """
+                !include:include_c.yaml
+                value_b: 42
+                list: ["y", "z"]
+                nested:
+                  deep:
+                    list_node: ["y", "z"]
+            """,
+            "path/to/include_c.yaml": """
+                value_c: 13.37
+                nested:
+                  deep:
+                    str_node: "deep_value"
+                    list_node: ["x", "y"]
+            """,
+            "path/to/include_d.yaml": """
+                some: "body"
+                once: "told me"
+            """,
+        },
+        args=[
+            *args,
+            "--config_file path/to/config.yaml",
+        ],
+    )
+    def test_parse_config_file_include(self, invocation: Invocation) -> None:
+        assert invocation.logs == literal(
+            "value_a: str = 'A'",
+            "value_b: int = 42",
+            "value_c: float = 13.37",
+            "list: list[str] = ['x', 'y', 'z']",
+            "nested.shallow_node.some: str = 'body'",
+            "nested.shallow_node.once: str = 'told me'",
+            "nested.deep.str_node: str = 'deep_value'",
+            "nested.deep.list_node: list[str] = ['x', 'y', 'z']",
+        )

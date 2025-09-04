@@ -284,7 +284,7 @@ def start_runners(
                     samples.split(by=r.split_by) if r.split_by else [(None, samples)]
                 )
             ):
-                workdir = config.workdir / config.tag / runner_.label
+                workdir = config.workdir / config.tag / runner_.name
                 if runner_.split_by is not None:
                     workdir /= str(group or "unknown")
                 for sample in samples_:

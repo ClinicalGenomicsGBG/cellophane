@@ -5,9 +5,9 @@ description = "Library for wrappers integrating with SLIMS"
 authors = [{name = "Erik Demitz-Helin",email = "erik.demitz-helin@gu.se"}]
 readme = "README.md"
 dependencies = [
-    "click>=8.1.3,<9.0.0",
+    "click>=8.2.0,<9.0.0",
     "psutil>=5.9.4,<6.0.0",
-    "rich-click>=1.6.0,<2.0.0",
+    "rich-click>=1.8.9,<2.0.0",
     "humanfriendly>=10.0,<11.0",
     "jsonschema>=4.17.3,<5.0.0",
     "attrs>=23.1.0,<24.0.0",

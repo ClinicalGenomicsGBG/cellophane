@@ -348,8 +348,8 @@ class TypedArray(InvertibleParamType):
     def invert(self, value: list) -> str:
         return value if isinstance(value, str) else ", ".join(repr(v) for v in value)
 
-    def get_metavar(self, param: click.Parameter) -> str | None:
-        del param  # Unused
+    def get_metavar(self, param: click.Parameter, ctx: click.Context | None = None) -> str | None:
+        del param, ctx  # Unused
         metavar = f"{self.name.upper()}"
         if (items_type := self.items.get("type")) is not None:
             metavar += f"[{items_type}]"
@@ -489,8 +489,8 @@ class FormattedString(click.ParamType):
             self.fail(f"Unable to convert '{value}' to string: {exc!r}", param, ctx)
         return _value
 
-    def get_metavar(self, param: click.Parameter) -> str | None:
-        del param
+    def get_metavar(self, param: click.Parameter, ctx: click.Context | None = None) -> str | None:
+        del param, ctx  # Unused
         metavar = f"{self.name.upper()}"
         if self.format_:
             metavar += f"[{self.format_}]"

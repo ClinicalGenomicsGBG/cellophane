@@ -5,13 +5,13 @@ from pathlib import Path
 from typing import Any, Callable
 
 import rich_click as click
-from ruamel.yaml import YAML
 
 from cellophane import data
 
 from .config import Config
 from .jsonschema_ import get_flags
 from .schema import Schema
+from .util import inclusive_yaml
 
 
 def with_options(schema: Schema) -> Callable:
@@ -35,6 +35,8 @@ def with_options(schema: Schema) -> Callable:
 
     """
 
+
+
     def wrapper(callback: Callable) -> Callable:
         @click.command(
             add_help_option=False,
@@ -52,9 +54,12 @@ def with_options(schema: Schema) -> Callable:
         def inner(ctx: click.Context, config_file: Path | None) -> None:
             nonlocal callback
 
+            _root = config_file.parent if config_file is not None else None
+            yaml = inclusive_yaml(_root)
+
             try:
                 config_container = data.Container(
-                    YAML(typ="safe").load(config_file)
+                    yaml.load(config_file)
                     if config_file is not None
                     else {}
                 )
@@ -77,9 +82,9 @@ def with_options(schema: Schema) -> Callable:
                     value is not None
                     and (src := _dummy_ctx.get_parameter_source(param))
                     and src.name != "DEFAULT"
-                    and (flag := _flags.get(param))
+                    and param in _flags
                 ):
-                    config_container[flag.key] = value
+                    config_container[_flags[param].key] = value
 
             # Set the config file path
             config_container.config_file = config_file

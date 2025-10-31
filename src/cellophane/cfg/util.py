@@ -1,12 +1,25 @@
 """Utility functions for working with YAML configuration files"""
 
+import re
+from functools import partial
+from pathlib import Path
 from typing import Any
 
-from ruamel.yaml import YAML, CommentedMap, CommentToken
+from ruamel.yaml import (
+    YAML,
+    CommentedMap,
+    CommentToken,
+    Loader,
+    MappingNode,
+    Node,
+    ScalarNode,
+    SequenceNode,
+    YAMLError,
+)
 from ruamel.yaml.compat import StringIO
 from ruamel.yaml.error import CommentMark
 
-from cellophane import data
+from cellophane import data, util
 
 
 class _BLANK:
@@ -98,3 +111,44 @@ def comment_yaml_block(
 
     # Add back value as a comment token
     node_ca.append(CommentToken(commented_block, CommentMark(0)))
+
+def _include(loader: Loader, sufix: str, node: Node, root: Path | None) -> Any:
+    include_names = re.split(r"[:;,|]", sufix.removeprefix(":"))
+    include_paths = [(root / n) if root is not None else Path(n) for n in include_names]
+    yaml = YAML(typ="safe")
+    include_data = yaml.load(include_paths[0])
+    for path in include_paths[1:]:
+        include_data = util.merge_mappings(include_data, yaml.load(path))
+
+    match node:
+        case MappingNode():
+            node.tag = loader.resolver.DEFAULT_MAPPING_TAG
+            node_data = loader.construct_mapping(node, deep=True)
+        case SequenceNode():
+            node.tag = loader.resolver.DEFAULT_SEQUENCE_TAG
+            node_data = loader.construct_sequence(node, deep=True)
+        case ScalarNode(value=""):
+            node_data = type(include_data)()
+        case ScalarNode():
+            raise YAMLError("Scalar nodes are not supported with '!import'")
+        case _:
+            raise YAMLError(f"Unsupported node type for '!import': {node.__class__.__name__}")
+
+    return util.merge_mappings(include_data, node_data)
+
+
+def inclusive_yaml(root: Path | None = None) -> YAML:
+    """Creates a YAML loader that supports the !include directive.
+
+    Returns a ruamel.yaml YAML instance configured to handle !include tags, enabling modular YAML configuration files.
+
+    Args:
+        root: The root directory to resolve included file paths.
+
+    Returns:
+        YAML: A ruamel.yaml YAML instance with !include support.
+    """
+    yaml = YAML(typ="safe")
+    yaml.constructor.add_multi_constructor("!include", partial(_include, root=root))
+
+    return yaml

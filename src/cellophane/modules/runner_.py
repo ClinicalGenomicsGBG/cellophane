@@ -266,7 +266,8 @@ def start_runners(
         return samples
 
     result_samples = samples.__class__()
-    sample_runner_count: dict[UUID, int] = {}
+    sample_runner_count: dict[UUID, int] = {sample.uuid: 0 for sample in samples}
+    sample_locks: dict[UUID, LockType] = {sample.uuid: Lock() for sample in samples}
     callback_locks: list[LockType] = []
 
     with WorkerPool(
@@ -276,9 +277,8 @@ def start_runners(
         shared_objects=log_queue,
     ) as pool:
         try:
-
             for runner_, group, samples_ in (
-                (r, g, s)
+               (r, g, s)
                 for r in runners
                 for g, s in (
                     samples.split(by=r.split_by) if r.split_by else [(None, samples)]
@@ -287,14 +287,11 @@ def start_runners(
                 workdir = config.workdir / config.tag / runner_.name
                 if runner_.split_by is not None:
                     workdir /= str(group or "unknown")
-                for sample in samples_:
-                    if sample.uuid not in sample_runner_count:
-                        sample_runner_count[sample.uuid] = 1
-                    else:
-                        sample_runner_count[sample.uuid] += 1
                 callback_lock = Lock()
                 callback_lock.acquire()
                 callback_locks.append(callback_lock)
+                for sample in samples_:
+                    sample_runner_count[sample.uuid] += 1
                 pool.apply_async(
                     runner_,
                     kwargs={
@@ -312,6 +309,7 @@ def start_runners(
                         logger=logger,
                         samples=result_samples,
                         sample_runner_count=sample_runner_count,
+                        sample_locks=sample_locks,
                         cleaner=cleaner,
                         pool=pool,
                         hooks=hooks,

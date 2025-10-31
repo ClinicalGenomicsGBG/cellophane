@@ -79,6 +79,7 @@ def runner_callback(
     cleaner: Cleaner,
     pool: WorkerPool,
     sample_runner_count: dict[UUID, int],
+    sample_locks: dict[UUID, LockType],
     hooks: Sequence[Hook],
     config: Config,
     root: Path,
@@ -106,26 +107,27 @@ def runner_callback(
                 samples[sample.uuid].fail(_msg)
 
     for uuid, sample in ((u, s) for u, s in samples.split() if u in result[0]):
-        sample_runner_count[uuid] -= 1
-        if sample_runner_count[uuid] == 0:
-            _log_label = (logger.extra or {"label": "cellophane"})["label"]
+        with sample_locks[uuid]:
+            sample_runner_count[uuid] -= 1
+            if sample_runner_count[uuid] != 0:
+                continue  # Wait for other runners to finish for this sample
 
-            pool.apply_async(
-                _run_per_sample_hooks,
-                kwargs={
-                    "log_label": _log_label,
-                    "hooks": hooks,
-                    "samples": sample,
-                    "config": config,
-                    "root": root,
-                    "executor_cls": executor_cls,
-                    "timestamp": timestamp,
-                },
-                callback=partial(
-                    _hook_callback,
-                    samples=samples,
-                    logger=logger,
-                    cleaner=cleaner,
-                )
+        pool.apply_async(
+            _run_per_sample_hooks,
+            kwargs={
+                "log_label": (logger.extra or {"label": "cellophane"})["label"],
+                "hooks": hooks,
+                "samples": sample,
+                "config": config,
+                "root": root,
+                "executor_cls": executor_cls,
+                "timestamp": timestamp,
+            },
+            callback=partial(
+                _hook_callback,
+                samples=samples,
+                logger=logger,
+                cleaner=cleaner,
             )
+        )
     lock.release()

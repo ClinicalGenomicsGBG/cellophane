@@ -1,18 +1,28 @@
 """JSON Schema validators for Cellophane configuration files."""
 
+from __future__ import annotations
+
 from copy import deepcopy
 from functools import cache, partial, reduce, singledispatch
 from pathlib import Path
-from typing import Callable, Generator, Mapping
+from typing import TYPE_CHECKING
 
 from frozendict import frozendict
 from jsonschema.exceptions import ValidationError
-from jsonschema.protocols import Validator
 from jsonschema.validators import Draft7Validator, create, extend
 
-from cellophane import data, util
+from cellophane.data import as_dict
+from cellophane.util import freeze, map_nested_keys, merge_mappings, unfreeze
 
 from .flag import Flag
+
+if TYPE_CHECKING:
+    from typing import Callable, Generator, Mapping
+
+    from jsonschema.protocols import Validator
+
+    from cellophane.data import Container
+
 
 _cellophane_type_checker = Draft7Validator.TYPE_CHECKER.redefine_many(
     {
@@ -42,9 +52,9 @@ def _uptate_validators(
     for _validator in validators.values():
         if isinstance(_validator, partial):
             if "compiled" in _validator.keywords:
-                _validator.keywords.update({"compiled": compiled})
+                _validator.keywords.update({"compiled": compiled})  # ty: ignore[no-matching-overload]
             if "_path" in _validator.keywords:
-                _validator.keywords.update({"_path": _path})
+                _validator.keywords.update({"_path": _path})  # ty: ignore[no-matching-overload]
 
 
 def properties_(
@@ -131,7 +141,7 @@ def properties_(
                 for k, v in _flag_kwargs.items():
                     setattr(flags[key], k, v)
             else:
-                flag = Flag(**_flag_kwargs)
+                flag = Flag(**_flag_kwargs)  # ty: ignore[invalid-argument-type]
                 flags[key] = flag
 
             if (default := subschema.get("default")) is not None:
@@ -191,12 +201,12 @@ def dependent_schemas_(
     del validator, schema  # Unused
 
     if instance is None:
-        subschema = reduce(util.merge_mappings, dependencies.values())
+        subschema = reduce(merge_mappings, dependencies.values())
     elif valid := [s for d, s in dependencies.items() if d in instance]:
-        subschema = reduce(util.merge_mappings, valid)
+        subschema = reduce(merge_mappings, valid)
     else:
         subschema = {}
-    compiled |= util.merge_mappings(compiled, subschema)
+    compiled |= merge_mappings(compiled, subschema)
     compiled.pop("dependentSchemas")
 
 
@@ -209,8 +219,8 @@ def all_of_(
 ) -> None:
     """Merge all subschemas into the compiled schema"""
     del validator, instance, schema  # Unused
-    subschema = reduce(util.merge_mappings, all_of)
-    compiled |= util.merge_mappings(compiled, subschema)
+    subschema = reduce(merge_mappings, all_of)
+    compiled |= merge_mappings(compiled, subschema)
     compiled.pop("allOf")
 
 
@@ -225,13 +235,13 @@ def any_of_(
     del validator, schema  # Unused
 
     if instance is None:
-        subschema = reduce(util.merge_mappings, any_of)
+        subschema = reduce(merge_mappings, any_of)
     elif _valid := [s for s in any_of if BaseValidator(s).is_valid(instance)]:
-        subschema = reduce(util.merge_mappings, _valid)
+        subschema = reduce(merge_mappings, _valid)
     else:
         subschema = {}
 
-    compiled |= util.merge_mappings(compiled, subschema)
+    compiled |= merge_mappings(compiled, subschema)
     compiled.pop("anyOf")
 
 
@@ -246,14 +256,14 @@ def one_of_(
     del validator, schema  # Unused
 
     if instance is None:
-        subschema = reduce(util.merge_mappings, one_of)
+        subschema = reduce(merge_mappings, one_of)
     else:
         try:
             subschema = next(s for s in one_of if BaseValidator(s).is_valid(instance))
         except StopIteration:
             subschema = {}
 
-    compiled |= util.merge_mappings(compiled, subschema)
+    compiled |= merge_mappings(compiled, subschema)
     compiled.pop("oneOf")
 
 
@@ -268,31 +278,31 @@ def if_(
     del validator  # Unused
 
     if instance is None:
-        subschema = util.merge_mappings(schema.get("then", {}), schema.get("else", {}))
+        subschema = merge_mappings(schema.get("then", {}), schema.get("else", {}))
     elif BaseValidator(if_schema).is_valid(instance):
         subschema = schema.get("then", {})
     else:
         subschema = schema.get("else", {})
 
-    compiled |= util.merge_mappings(compiled, subschema)
+    compiled |= merge_mappings(compiled, subschema)
     compiled.pop("if")
 
 
 @singledispatch
-def get_flags(schema: data.Container, data_: Mapping | None = None) -> list[Flag]:
+def get_flags(schema: Container, data_: Mapping | None = None) -> list[Flag]:
     """Get the flags for a configuration schema."""
-    return get_flags(util.freeze(data.as_dict(schema)), util.freeze(data_))
+    return get_flags(freeze(as_dict(schema)), freeze(data_))
 
 
 @get_flags.register
 @cache
 def _(schema: frozendict, data_: frozendict | None = None) -> list[Flag]:
-    data_thawed = util.unfreeze(data_)
-    schema_thawed = util.unfreeze(schema)
+    data_thawed = unfreeze(data_)
+    schema_thawed = unfreeze(schema)
     flags: dict[tuple[str, ...], Flag] = {}
 
     while any(
-        keyword in (kw for node in util.map_nested_keys(schema_thawed) for kw in node)
+        keyword in (kw for node in map_nested_keys(schema_thawed) for kw in node)
         for keyword in [
             "if",
             "anyOf",

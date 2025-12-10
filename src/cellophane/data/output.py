@@ -1,16 +1,19 @@
 """Outut classes for copying files to another directory."""
+from __future__ import annotations
 
 from glob import glob
 from pathlib import Path
-from typing import Iterable
+from typing import TYPE_CHECKING
 from warnings import warn
 
 from attrs import define, field
 from attrs.setters import convert
 
-from cellophane.util import Timestamp
+if TYPE_CHECKING:
+    from typing import Iterable
 
-from .container import Container
+    from cellophane.cfg import Config
+    from cellophane.util import Timestamp
 
 
 @define
@@ -87,7 +90,7 @@ class OutputGlob:  # type: ignore[no-untyped-def]
         self,
         samples: Iterable,
         workdir: Path,
-        config: Container,
+        config: Config,
         timestamp: Timestamp,
         _warnings: bool = True,
     ) -> set[Output]:
@@ -98,7 +101,7 @@ class OutputGlob:  # type: ignore[no-untyped-def]
             samples (Samples): The samples being processed.
             workdir (Path): The working directory
                 with tag and the value of the split_by attribute (if any) appended.
-            config (Container): The configuration object.
+            config (Config): The configuration object.
             logger (LoggerAdapter): The logger.
 
         Returns:

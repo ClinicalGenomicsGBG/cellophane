@@ -1,13 +1,17 @@
-from logging import LoggerAdapter
-from pathlib import Path
+from __future__ import annotations
+
 from time import sleep
-from typing import Any
-from uuid import UUID
+from typing import TYPE_CHECKING
 
 from attrs import define
 
 from cellophane.executors.executor import Executor
 
+if TYPE_CHECKING:
+    from logging import LoggerAdapter
+    from pathlib import Path
+    from typing import Any
+    from uuid import UUID
 
 @define(slots=False, init=False)
 class MockExecutor(Executor, name="mock"):

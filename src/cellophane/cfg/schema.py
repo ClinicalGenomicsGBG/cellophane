@@ -1,20 +1,24 @@
 """Schema for configuration data"""
+from __future__ import annotations
 
 from functools import cached_property
 from pathlib import Path
-from typing import Any, Sequence
+from typing import TYPE_CHECKING, Sequence
 
 from ruamel.yaml import YAML, CommentedMap, CommentToken
 from ruamel.yaml.error import CommentMark
 from ruamel.yaml.scalarstring import DoubleQuotedScalarString, LiteralScalarString
 
-from cellophane import data, util
+from cellophane.data import Container, as_dict
+from cellophane.util import merge_mappings
 
 from .jsonschema_ import get_flags
 from .util import comment_yaml_block, dump_yaml
 
+if TYPE_CHECKING:
+    from typing import Any
 
-class Schema(data.Container):
+class Schema(Container):
     """Represents a schema for configuration data.
 
     Class Methods:
@@ -59,7 +63,7 @@ class Schema(data.Container):
         elif isinstance(path, Sequence):
             schema: dict = {}
             for p in path:
-                schema = util.merge_mappings(schema, data.as_dict(cls.from_file(p)))
+                schema = merge_mappings(schema, as_dict(cls.from_file(p)))
             return cls(schema)
 
     @cached_property

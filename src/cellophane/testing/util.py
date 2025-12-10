@@ -1,12 +1,17 @@
+from __future__ import annotations
+
 import re
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Optional, Union
+from typing import TYPE_CHECKING, Iterable, Mapping
+
+if TYPE_CHECKING:
+     from typing import Any
 
 
 class PathDict(dict):
-    def __init__(self, arg: Optional[Union[Mapping, Iterable]] = None, **kwargs: Any):
+    def __init__(self, arg: Mapping[str, Any] | Iterable | None = None, **kwargs: Any):
         if isinstance(arg, Mapping):
-            return self.__class__.__init__(self, **arg, **kwargs)
+            return self.__class__.__init__(self, **arg, **kwargs)  # ty: ignore[invalid-argument-type]
         elif isinstance(arg, Iterable):
             return self.__class__.__init__(self, **dict(arg), **kwargs)
 
@@ -31,7 +36,7 @@ class PathDict(dict):
             return self[parent][child]
         return super().__getitem__(_key)
 
-    def update(self, other: dict | Iterable[tuple[Any, Any]], /, **kwargs: Any) -> None:  # type: ignore[override]
+    def update(self, other: dict | Iterable[tuple[Any, Any]], /, **kwargs: Any) -> None:
         for key, value in (dict(other) | kwargs).items():
             self[key] = value
 
@@ -54,14 +59,14 @@ class regex:
                 case (str(p),):
                     self.patterns.append(re.compile(p, flags))
                 case re.Pattern:
-                    self.patterns.append(pattern)
+                    self.patterns.append(pattern)  # ty: ignore[invalid-argument-type]
                 case _:
                     raise ValueError(f"Invalid pattern {pattern}")
 
-    def __contains__(self, other: Union[str, bytes]) -> bool:
+    def __contains__(self, other: str | bytes) -> bool:
         return self == other
 
-    def __eq__(self, other: Union[str, Path, Iterable]) -> bool:  # type: ignore[override]
+    def __eq__(self, other: str | Path | Iterable) -> bool:
         if isinstance(other, Path):
             if not other.is_file():
                 raise ValueError("Path must be a file")
@@ -73,7 +78,7 @@ class regex:
 
         return all(pattern.search(other) is not None for pattern in self.patterns)
 
-    def __ne__(self, other: Union[str, Path]) -> bool:  # type: ignore[override]
+    def __ne__(self, other: str | Path) -> bool:
         if isinstance(other, Path):
             if not other.is_file():
                 raise ValueError("Path must be a file")

@@ -1,21 +1,19 @@
 """Flag class for command-line options."""
 
+from __future__ import annotations
+
 from functools import partial
-from typing import Any, Callable, Iterable, SupportsFloat, Type, get_args
+from typing import TYPE_CHECKING, get_args
 
 import rich_click as click
 from attrs import define, field, setters
 
-from .click_ import (
-    FORMATS,
-    SCHEMA_TYPES,
-    FormattedString,
-    InvertibleParamType,
-    ParsedSize,
-    StringMapping,
-    TypedArray,
-    click_type,
-)
+from .click_ import FORMATS, SCHEMA_TYPES, InvertibleParamType, click_type
+
+if TYPE_CHECKING:
+    from typing import Any, Callable, Iterable, SupportsFloat, Type
+
+    from .click_ import FormattedString, ParsedSize, StringMapping, TypedArray
 
 
 def _convert_float(value: SupportsFloat | None) -> float | None:
@@ -71,11 +69,11 @@ class Flag:
     description: str | None = field(default=None)
     default: Any = field(default=None)
     value: Any = field(default=None)
-    enum: list[Any] | None = field(default=None)
+    enum: list | None = field(default=None)
     required: bool = field(default=False)
     secret: bool = field(default=False)
 
-    @type.validator
+    @type.validator  # ty: ignore[unresolved-attribute]
     def _type(self, attribute: str, value: str | None) -> None:
         del attribute  # Unused
 
@@ -183,11 +181,7 @@ class Flag:
         type_ = self.click_type
         default = self.default if self.value is None else self.value
         return click.option(
-            (
-                f"--{self.flag}/--{self.no_flag}"
-                if self.type == "boolean"
-                else f"--{self.flag}"
-            ),
+            (f"--{self.flag}/--{self.no_flag}" if self.type == "boolean" else f"--{self.flag}"),
             self.flag,
             type=type_,
             default=True if self.type == "boolean" and default is None else default,
@@ -214,10 +208,6 @@ class Flag:
             Callable: A click.option decorator
         """
         return click.option(
-            (
-                f"--{self.flag}/--{self.no_flag}"
-                if self.type == "boolean"
-                else f"--{self.flag}"
-            ),
+            (f"--{self.flag}/--{self.no_flag}" if self.type == "boolean" else f"--{self.flag}"),
             type=bool if self.type == "boolean" else None,
         )

@@ -1,18 +1,19 @@
 """Main cellophane entry point wrapper."""
+from __future__ import annotations
 
 import time
 from importlib.metadata import version
 from importlib.util import find_spec
 from logging import LoggerAdapter, getLogger
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
 
-import rich_click as click
 from humanfriendly import format_timespan
+from rich_click import rich_click
 from ruamel.yaml.error import YAMLError
 
 from cellophane import executors
-from cellophane.cfg import Config, Schema, with_options
+from cellophane.cfg import Schema, with_options
 from cellophane.cleanup import Cleaner
 from cellophane.data import OutputGlob, Sample, Samples
 from cellophane.logs import (
@@ -25,12 +26,20 @@ from cellophane.logs import (
 from cellophane.modules import Dispatcher, load
 from cellophane.util import Timestamp
 
+if TYPE_CHECKING:
+    from typing import Any
+
+    from rich_click import Command
+
+    from cellophane.cfg import Config
+
+
 spec = find_spec("cellophane")
 CELLOPHANE_ROOT = Path(spec.origin).parent  # type: ignore[union-attr, arg-type]
 CELLOPHANE_VERSION = version("cellophane")
 
 
-def cellophane(label: str, root: Path) -> click.Command:
+def cellophane(label: str, root: Path) -> Command:
     """Creates a click command for running the Cellophane application.
 
     Defines a click command that represents the Cellophane application.
@@ -48,12 +57,12 @@ def cellophane(label: str, root: Path) -> click.Command:
 
     Returns:
     -------
-        click.BaseCommand: The click command for the Cellophane application.
+        Command: The click command for the Cellophane application.
 
     """
-    click.rich_click.REQUIRED_LONG_STRING = "(REQUIRED)"
-    click.rich_click.DEFAULT_STRING = "{}"
-    click.rich_click.STYLE_OPTION_DEFAULT = "green"
+    rich_click.REQUIRED_LONG_STRING = "(REQUIRED)"
+    rich_click.DEFAULT_STRING = "{}"
+    rich_click.STYLE_OPTION_DEFAULT = "green"
     external_filter = ExternalFilter((CELLOPHANE_ROOT, root / "modules"))
     console_handler = setup_console_handler(filters=(external_filter,))
     logger = LoggerAdapter(getLogger(), {"label": label})

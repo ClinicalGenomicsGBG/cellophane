@@ -1,17 +1,22 @@
 """Configuration file handling and CLI generation"""
+from __future__ import annotations
 
 from functools import wraps
 from pathlib import Path
-from typing import Any, Callable
+from typing import TYPE_CHECKING
 
 import rich_click as click
 
-from cellophane import data
+from cellophane.data import Container, as_dict
 
 from .config import Config
 from .jsonschema_ import get_flags
-from .schema import Schema
 from .util import inclusive_yaml
+
+if TYPE_CHECKING:
+    from typing import Any, Callable
+
+    from .schema import Schema
 
 
 def with_options(schema: Schema) -> Callable:
@@ -58,7 +63,7 @@ def with_options(schema: Schema) -> Callable:
             yaml = inclusive_yaml(_root)
 
             try:
-                config_container = data.Container(
+                config_container = Container(
                     yaml.load(config_file)
                     if config_file is not None
                     else {}
@@ -96,7 +101,7 @@ def with_options(schema: Schema) -> Callable:
                 config_container.logdir = config_container.get("logdir", workdir / "logs")
 
             # Add flags to the callback with the values from the dummy command
-            _final_flags = {flag.flag: flag for flag in get_flags(schema, data.as_dict(config_container))}
+            _final_flags = {flag.flag: flag for flag in get_flags(schema, as_dict(config_container))}
 
             @click.command()
             @wraps(callable)

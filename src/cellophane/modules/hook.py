@@ -1,16 +1,22 @@
+from __future__ import annotations
+
 from graphlib import TopologicalSorter
 from logging import LoggerAdapter, getLogger
-from multiprocessing.queues import Queue
-from pathlib import Path
-from typing import Any, Literal, TypeAlias
+from typing import TYPE_CHECKING
 
-from cellophane.cfg import Config
-from cellophane.cleanup import Cleaner, DeferredCleaner
 from cellophane.data import Samples
-from cellophane.executors import Executor
-from cellophane.util import NamedCallable, Timestamp
 
 from .checkpoint import Checkpoints
+
+if TYPE_CHECKING:
+    from multiprocessing.queues import Queue
+    from pathlib import Path
+    from typing import Any, Literal, TypeAlias
+
+    from cellophane.cfg import Config
+    from cellophane.cleanup import Cleaner, DeferredCleaner
+    from cellophane.executors import Executor
+    from cellophane.util import NamedCallable, Timestamp
 
 
 class _AFTER_ALL: ...

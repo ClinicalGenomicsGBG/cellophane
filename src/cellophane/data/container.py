@@ -1,12 +1,17 @@
 """Base container class for the Config, Sample, and Samples classes."""
+from __future__ import annotations
 
 from copy import deepcopy
 from functools import reduce
-from typing import Any, Iterator, Mapping, Sequence
+from typing import TYPE_CHECKING, Mapping
 
 from attrs import define, field, fields_dict
 
-from .. import util
+from cellophane.util import merge_mappings
+
+if TYPE_CHECKING:
+    from typing import Any, Iterator, Sequence
+
 
 
 class PreservedDict(dict):
@@ -36,7 +41,7 @@ class Container(Mapping):
     def __or__(self, other: "Container") -> "Container":
         if self.__class__ != other.__class__:
             raise TypeError("Cannot merge containers of different types")
-        return self.__class__(**util.merge_mappings(self, other))
+        return self.__class__(**merge_mappings(self, other))
 
     def __init__(  # pylint: disable=keyword-arg-before-vararg
         self,
@@ -47,7 +52,7 @@ class Container(Mapping):
         _data = __data__ or {}
         for key in [k for k in kwargs if k not in fields_dict(self.__class__)]:
             _data[key] = kwargs.pop(key)
-        self.__attrs_init__(*args, **kwargs)
+        self.__attrs_init__(*args, **kwargs)  # ty: ignore[call-non-callable]
         for k, v in _data.items():
             self[k] = v
 
@@ -57,9 +62,9 @@ class Container(Mapping):
         object.__setattr__(instance, "__data__", {})
         return instance
 
-    def __contains__(self, key: str | Sequence[str]) -> bool:  # type: ignore[override]
+    def __contains__(self, key: str | Sequence[str]) -> bool:
         try:
-            self[key]  # pylint: disable=pointless-statement]
+            self[key]
             return True
         except (KeyError, TypeError):
             return False

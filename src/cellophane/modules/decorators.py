@@ -1,18 +1,25 @@
-from pathlib import Path
-from typing import Any, Callable, Literal
+from __future__ import annotations
 
-from cellophane.data import OutputGlob, Samples
-from cellophane.modules.hook import DEPENDENCY_TYPE
-from cellophane.util import NamedCallable
+from typing import TYPE_CHECKING, overload
+
+from cellophane.data import OutputGlob
 
 from .hook import ExceptionHook, PostHook, PreHook
 from .runner_ import Runner
+
+if TYPE_CHECKING:
+    from pathlib import Path
+    from typing import Any, Callable, Literal
+
+    from cellophane.data import Samples
+    from cellophane.modules.hook import DEPENDENCY_TYPE
+    from cellophane.util import NamedCallable
 
 
 def output(
     src: str,
     /,
-    dst_dir: Path | None = None,
+    dst_dir: str | Path | None = None,
     dst_name: str | None = None,
     checkpoint: str = "main",
     optional: bool = False,
@@ -42,7 +49,13 @@ def output(
 
     """
 
-    def wrapper(func: Callable) -> Callable:
+    @overload
+    def wrapper(func: NamedCallable[..., Samples | None]) -> NamedCallable[..., Samples | None]: ...
+
+    @overload
+    def wrapper(func: Runner) -> Runner: ...
+
+    def wrapper(func: NamedCallable | Runner) -> NamedCallable[..., Samples | None] | Runner:
         if isinstance(func, Runner):
             func.main = wrapper(func.main)
             return func
@@ -54,7 +67,7 @@ def output(
         ) -> Samples | None:
             glob_ = OutputGlob(
                 src=src,
-                dst_dir=dst_dir,
+                dst_dir=str(dst_dir) if dst_dir is not None else None,
                 dst_name=dst_name,
                 checkpoint=checkpoint,
                 optional=optional,

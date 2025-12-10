@@ -1,9 +1,14 @@
 """Utilities to freeze/unfreeze data structures."""
+from __future__ import annotations
 
 from functools import singledispatch
-from typing import Any
+from typing import TYPE_CHECKING
 
 from frozendict import frozendict
+
+if TYPE_CHECKING:
+    from typing import Any
+
 
 
 class frozenlist(tuple):

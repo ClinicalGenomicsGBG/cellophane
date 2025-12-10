@@ -1,7 +1,10 @@
 """Unitility functions for working with mappings."""
+from __future__ import annotations
 
-from typing import Any, Hashable
+from typing import TYPE_CHECKING, Hashable
 
+if TYPE_CHECKING:
+    from typing import Any
 
 def map_nested_keys(
     node: dict[str, Any] | Any,

@@ -1,12 +1,12 @@
+from __future__ import annotations
+
 import logging
 from pathlib import Path
-from typing import Callable, Iterator
+from typing import TYPE_CHECKING
 from warnings import warn
 
-import pytest
 from click.testing import CliRunner
-from pytest_mock import MockerFixture
-from pytest_subprocess import FakeProcess
+from pytest import fixture, mark, param
 from ruamel.yaml import YAML
 
 from .invocation import Invocation
@@ -14,12 +14,18 @@ from .util import literal
 
 _YAML = YAML(typ="unsafe")
 
+if TYPE_CHECKING:
+    from typing import Callable, Iterator
 
-@pytest.fixture(scope="function")
+    from pytest import Config, FixtureRequest, LogCaptureFixture
+    from pytest_mock import MockerFixture
+    from pytest_subprocess import FakeProcess
+
+@fixture(scope="function")
 def run_definition(
-    request: pytest.FixtureRequest,
-    caplog: pytest.LogCaptureFixture,
-    pytestconfig: pytest.Config,
+    request: FixtureRequest,
+    caplog: LogCaptureFixture,
+    pytestconfig: Config,
     mocker: MockerFixture,
     fp: FakeProcess,
     tmp_path: Path,
@@ -44,7 +50,7 @@ def run_definition(
                 args=_args,
                 structure=definition.get("structure", {}),
                 working_directory=Path(runner_cwd),
-                external_root=Path(request.fspath).parent,
+                external_root=Path(request.fspath).parent,  # ty: ignore[unresolved-attribute]
                 external=definition.get("external"),
             )
             _invocation(
@@ -72,8 +78,8 @@ def parametrize_from_yaml(paths: list[Path]) -> Callable:
     )
 
     def wrapper(func: Callable) -> Callable:
-        definitions = (pytest.param(d, id=d.pop("id")) for p in paths for d in _YAML.load(p))
-        return pytest.mark.parametrize("definition", definitions)(func)
+        definitions = (param(d, id=d.pop("id")) for p in paths for d in _YAML.load(p))
+        return mark.parametrize("definition", definitions)(func)
 
     return wrapper
 

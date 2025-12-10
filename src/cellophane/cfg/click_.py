@@ -1,29 +1,26 @@
 """Click related utilities for configuration."""
 
+from __future__ import annotations
+
 import re
 from ast import literal_eval
 from contextlib import suppress
 from functools import partial
 from pathlib import Path
-from typing import (
-    Any,
-    Callable,
-    Literal,
-    Mapping,
-    MutableMapping,
-    Type,
-    get_args,
-    overload,
-)
+from typing import TYPE_CHECKING, Literal, Mapping, get_args, overload
 
 import rich_click as click
 from humanfriendly import format_size, parse_size
 from jsonschema._format import draft7_format_checker
 from jsonschema.exceptions import FormatError
 
-from cellophane import data, util
+from cellophane.data import Container, PreservedDict
+from cellophane.util import map_nested_keys
 
 from .util import extract_parens
+
+if TYPE_CHECKING:
+    from typing import Any, Callable, MutableMapping
 
 SCHEMA_TYPES = Literal[
     "string",
@@ -132,7 +129,7 @@ class StringMapping(InvertibleParamType):
         param: click.Parameter | None,
         ctx: click.Context | None,
         fail: bool = True,
-    ) -> data.PreservedDict:
+    ) -> PreservedDict:
         """Converts a string value to a mapping.
 
         This method takes a value and converts it to a mapping.
@@ -170,13 +167,13 @@ class StringMapping(InvertibleParamType):
         """
 
         if isinstance(value, Mapping):
-            return data.PreservedDict(value)
+            return PreservedDict(value)
 
         try:
             tokens, extra = self.scanner.scan(value)
             if extra or len(tokens) % 2 != 0:
                 raise ValueError
-            parsed = data.PreservedDict(zip(tokens[::2], tokens[1::2]))
+            parsed = PreservedDict(zip(tokens[::2], tokens[1::2]))
         except Exception:  # pylint: disable=broad-except
             if not fail:
                 raise
@@ -197,7 +194,7 @@ class StringMapping(InvertibleParamType):
             except StopIteration:
                 break
 
-        return data.PreservedDict(parsed)
+        return PreservedDict(parsed)
 
     def invert(self, value: dict) -> str:
         """Inverts the value back to a string representation.
@@ -213,8 +210,8 @@ class StringMapping(InvertibleParamType):
         """
         if isinstance(value, str):
             return value
-        _container = data.Container(value)
-        _keys = util.map_nested_keys(value)
+        _container = Container(value)
+        _keys = map_nested_keys(value)
         _nodes: list[str] = [f"{'.'.join(k)}={repr(_container[k])}" for k in _keys]
 
         return ",".join(_nodes)
@@ -323,7 +320,7 @@ class TypedArray(InvertibleParamType):
             self.fail(str(exc), param, ctx)
 
         if not self.items.get("type"):
-            return parsed
+            return parsed  # ty: ignore[invalid-return-type]
 
         items_click_type: Callable = click_type(
             self.items.get("type", "string"),
@@ -522,7 +519,7 @@ def click_type(  # type: ignore[return]
     min_: int | float | None = None,
     max_: int | float | None = None,
 ) -> (
-    Type[bool]
+    type[bool]
     | click.Path
     | click.Choice
     | ResilientIntRange

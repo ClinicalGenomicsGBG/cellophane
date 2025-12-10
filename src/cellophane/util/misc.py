@@ -1,12 +1,12 @@
 """Miscellaneous utility functions."""
 
 import logging
-from typing import Any
+from typing import Any, ParamSpec, Protocol, TypeVar
 
 from attrs import define, field
 
 
-def is_instance_or_subclass(obj: Any, cls: type) -> bool:
+def is_instance_or_subclass(obj: Any, class_or_tuple: type | tuple[type, ...]) -> bool:
     """Checks if an object is an instance of or a subclass of a class.
 
     Args:
@@ -29,10 +29,11 @@ def is_instance_or_subclass(obj: Any, cls: type) -> bool:
         ```
 
     """
-    if isinstance(obj, type):
-        return issubclass(obj, cls) and obj != cls
-    else:
-        return isinstance(obj, cls)
+    if not isinstance(obj, type):
+        return isinstance(obj, class_or_tuple)
+
+    _tuple = (class_or_tuple,) if isinstance(class_or_tuple, type) else class_or_tuple
+    return issubclass(obj, _tuple) and all(obj != cls for cls in _tuple)
 
 
 @define
@@ -63,3 +64,11 @@ class freeze_logs:
             handler.close()
             self.logger.removeHandler(handler)
         self.logger.setLevel(self.original_level)
+
+
+P = ParamSpec("P")
+R = TypeVar("R", covariant=True)
+class NamedCallable(Protocol[P, R]):
+    __name__: str
+    __qualname__: str
+    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R: ...  # type: ignore[misc]

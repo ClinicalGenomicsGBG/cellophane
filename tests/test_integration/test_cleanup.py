@@ -1,5 +1,6 @@
-from cellophane.testing import BaseTest, Invocation, literal
 from pytest import mark
+
+from cellophane.testing import BaseTest, Invocation, literal
 
 
 class Test_cleanup(BaseTest):
@@ -166,6 +167,6 @@ class Test_cleanup(BaseTest):
     )
     def test_cleanup_deferred_invalid_call(self, invocation: Invocation) -> None:
         assert invocation.logs == literal(
-            "Exception when merging cleaners: ValueError('Invalid action: DUMMY')"
+            "Unhandled exception when merging cleaners: ValueError('Invalid deferred action: DUMMY')"
         )
         assert invocation.exit_code == 0

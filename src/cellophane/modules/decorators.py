@@ -1,9 +1,11 @@
 from pathlib import Path
 from typing import Any, Callable, Literal
 
-from cellophane import data
+from cellophane.data import OutputGlob, Samples
+from cellophane.modules.hook import DEPENDENCY_TYPE
+from cellophane.util import NamedCallable
 
-from .hook import DEPENDENCY_TYPE, Hook
+from .hook import ExceptionHook, PostHook, PreHook
 from .runner_ import Runner
 
 
@@ -47,10 +49,10 @@ def output(
 
         def inner(
             *args: Any,
-            samples: data.Samples,
+            samples: Samples,
             **kwargs: Any,
-        ) -> data.Samples | None:
-            glob_ = data.OutputGlob(
+        ) -> Samples | None:
+            glob_ = OutputGlob(
                 src=src,
                 dst_dir=dst_dir,
                 dst_name=dst_name,
@@ -84,7 +86,7 @@ def runner(
 
     """
 
-    def wrapper(func: Callable) -> Runner:
+    def wrapper(func: NamedCallable) -> Runner:
         return Runner(
             label=label,
             func=func,
@@ -96,9 +98,10 @@ def runner(
 
 def pre_hook(
     label: str | None = None,
+    condition: Literal["always", "unprocessed", "failed"] = "always",
     per: Literal["session", "runner"] = "session",
-    before: DEPENDENCY_TYPE = None,
-    after: DEPENDENCY_TYPE = None,
+    before: str | DEPENDENCY_TYPE | None = None,
+    after: str | DEPENDENCY_TYPE | None = None,
 ) -> Callable:
     """Decorator for creating a pre-hook.
 
@@ -116,12 +119,11 @@ def pre_hook(
 
     """
 
-    def wrapper(func: Callable) -> Hook:
-        return Hook(
+    def wrapper(func: NamedCallable) -> PreHook:
+        return PreHook(
             label=label,
             func=func,
-            when="pre",
-            condition="always",
+            condition=condition,
             per=per if per in ("session", "runner") else "session",
             before=before,
             after=after,
@@ -134,8 +136,8 @@ def post_hook(
     label: str | None = None,
     condition: Literal["always", "complete", "failed"] = "always",
     per: Literal["session", "sample", "runner"] = "session",
-    before: DEPENDENCY_TYPE = None,
-    after: DEPENDENCY_TYPE = None,
+    before: str | DEPENDENCY_TYPE | None = None,
+    after: str | DEPENDENCY_TYPE | None = None,
 ) -> Callable:
     """Decorator for creating a post-hook.
 
@@ -167,13 +169,45 @@ def post_hook(
     if condition not in ["always", "complete", "failed"]:
         raise ValueError(f"{condition=} must be one of 'always', 'complete', 'failed'")
 
-    def wrapper(func: Callable) -> Hook:
-        return Hook(
+    def wrapper(func: NamedCallable) -> PostHook:
+        return PostHook(
             label=label,
             func=func,
-            when="post",
             condition=condition,
             per=per if per in ("session", "sample", "runner") else "session",
+            before=before,
+            after=after,
+        )
+
+    return wrapper
+
+def exception_hook(
+    label: str | None = None,
+    before: str | DEPENDENCY_TYPE | None = None,
+    after: str | DEPENDENCY_TYPE | None = None,
+) -> Callable:
+    """Decorator for creating an exception hook.
+
+    Args:
+    ----
+        label (str | None): The label for the exception hook. Defaults to None.
+        per (Literal["session", "runner"]): The level at which the hook will be executed.
+            Defaults to "session".
+        before (list[str] | Literal["all"] | None): List of exception hooks guaranteed to
+            execute after the resulting exception hook. Defaults to an empty list.
+        after (list[str] | Literal["all"] | None): List of exception hooks guaranteed to
+            execute before the resulting exception hook. Defaults to an empty list.
+
+    Returns:
+    -------
+        Callable: The decorator function.
+
+    """
+
+    def wrapper(func: NamedCallable) -> ExceptionHook:
+        return ExceptionHook(
+            label=label,
+            func=func,
             before=before,
             after=after,
         )

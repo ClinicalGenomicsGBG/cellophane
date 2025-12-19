@@ -1,22 +1,28 @@
 """Runners for executing functions as jobs."""
 
+from __future__ import annotations
+
 from logging import LoggerAdapter, getLogger
-from multiprocessing import Queue
-from pathlib import Path
-from typing import Any, Callable
+from typing import TYPE_CHECKING
 
 from mpire.exception import InterruptWorker
 from psutil import Process, TimeoutExpired
 
-from cellophane.cfg import Config
 from cellophane.cleanup import DeferredCleaner
 from cellophane.data import OutputGlob, Samples
-from cellophane.executors import Executor
 from cellophane.logs import handle_warnings, redirect_logging_to_queue
-from cellophane.util import Timestamp
 
 from .checkpoint import Checkpoints
 
+if TYPE_CHECKING:
+    from multiprocessing import Queue
+    from pathlib import Path
+    from typing import Any, Callable
+
+    from cellophane.cfg import Config
+    from cellophane.executors import Executor
+    from cellophane.modules import Dispatcher
+    from cellophane.util import Timestamp
 
 def _resolve_outputs(
     samples: Samples,
@@ -122,7 +128,7 @@ class Runner:
         timestamp: Timestamp,
         workdir: Path,
         group: Any,
-        dispatcher: Any,
+        dispatcher: Dispatcher,
     ) -> tuple[Samples, DeferredCleaner]:
         handle_warnings()
         redirect_logging_to_queue(log_queue)

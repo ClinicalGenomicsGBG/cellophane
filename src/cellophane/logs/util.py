@@ -1,5 +1,7 @@
 """Logging utilities"""
 
+from __future__ import annotations
+
 import inspect
 import logging
 import warnings
@@ -7,10 +9,13 @@ from functools import cache
 from logging.handlers import QueueHandler, QueueListener
 from multiprocessing import Queue
 from pathlib import Path
-from typing import Any, Callable
+from typing import TYPE_CHECKING
 
 from attrs import define
 from rich.logging import RichHandler
+
+if TYPE_CHECKING:
+    from typing import Any, Callable
 
 
 @define
@@ -63,7 +68,7 @@ def _showwarning(showwarning_orig: Callable) -> Callable:
 
 def handle_warnings() -> None:
     _warnings_showwarning = warnings.showwarning
-    warnings.showwarning = _showwarning(_warnings_showwarning)
+    warnings.showwarning = _showwarning(_warnings_showwarning)  # ty: ignore[invalid-assignment]
 
 
 def redirect_logging_to_queue(

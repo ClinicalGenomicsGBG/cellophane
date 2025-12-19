@@ -1,10 +1,11 @@
 """Sample and Samples class definitions."""
+from __future__ import annotations
 
 from collections import UserList
 from contextlib import suppress
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, ClassVar, Iterable, Literal, Sequence, TypeVar, Union, overload
+from typing import TYPE_CHECKING, Any, ClassVar, TypeVar, overload
 from uuid import UUID, uuid4
 
 from attrs import define, field, fields_dict, make_class
@@ -14,9 +15,14 @@ from ruamel.yaml import YAML
 from .container import Container
 from .exceptions import MergeSamplesTypeError, MergeSamplesUUIDError
 from .merger import Merger
-from .output import Output, OutputGlob
 from .util import convert_path_list
 
+if TYPE_CHECKING:
+    from typing import Any, Iterable, Literal, Sequence
+
+    from cellophane.data import Output, OutputGlob
+
+S = TypeVar("S", bound="Sample")
 
 @overload
 def _apply_mixins(
@@ -57,13 +63,13 @@ def _apply_mixins(
         name_ += f"_{mixin.__name__}"
         if "__attrs_attrs__" not in mixin.__dict__:
             mixin = define(mixin, slots=False)
-        if cls not in mixin.__bases__:
-            mixin.__bases__ = (cls,)
+        if cls not in mixin.__bases__:  # ty: ignore[possibly-missing-attribute]
+            mixin.__bases__ = (cls,)  # ty: ignore[invalid-assignment]
 
         mixins_.append(mixin)
 
     cls_ = make_class(name_, (), (*mixins_,), slots=False)
-    cls_._mixins = (*mixins,)  # type: ignore[attr-defined]
+    cls_._mixins = (*mixins,)  # ty: ignore[unresolved-attribute]
     for k, v in kwargs.items():
         setattr(cls_, k, v)
     return cls_
@@ -98,7 +104,7 @@ def _reconstruct(
     kwargs: dict[str, Any],
     state: dict[str, Any],
     cls_kwargs: dict[str, Any] | None = None,
-) -> Union["Sample", "Samples"]:
+) -> Sample | Samples:
     cls_ = _apply_mixins(cls, mixins, **(cls_kwargs or {}))
     instance = cls_(*args, **kwargs)
     instance.__setstate__(state)
@@ -178,7 +184,7 @@ class Sample:  # type: ignore[no-untyped-def]
 
     def __and__(self, other: "Sample") -> "Sample":
         if self.uuid != other.uuid:
-            raise MergeSamplesUUIDError
+            raise MergeSamplesUUIDError("Cannot merge samples with different UUIDs")
 
         _sample = deepcopy(self)
         for _field in (f for f in fields_dict(self.__class__) if f not in ["id", "uuid"]):
@@ -244,10 +250,6 @@ class Sample:  # type: ignore[no-untyped-def]
         """
         return _apply_mixins(cls, mixins)
 
-
-S = TypeVar("S", bound="Sample")
-
-
 @define(slots=False, order=False, init=False)
 class Samples(UserList[S]):
     """Base samples class represents a list of samples.
@@ -275,7 +277,7 @@ class Samples(UserList[S]):
     _mixins: ClassVar[tuple[type["Samples"], ...]] = ()
 
     def __init__(self, data: list | None = None, /, **kwargs: Any) -> None:
-        self.__attrs_init__(**kwargs)  # pylint: disable=no-member
+        self.__attrs_init__(**kwargs)  # ty: ignore[unresolved-attribute]
         super().__init__(data or [])
 
     def __getitem__(self, key: int | UUID) -> S:  # type: ignore[override]
@@ -323,7 +325,7 @@ class Samples(UserList[S]):
         cls_kwargs = {"sample_class": self.sample_class}
         return (_reconstruct, (Samples, self._mixins, args, kwargs, state, cls_kwargs))
 
-    def __or__(self, other: "Samples") -> "Samples":
+    def __or__(self, other: Samples) -> Samples:
         """Returns a Samples object with samples from both self and other, without merging attributes
 
         If a sample is in both 'self' and 'other', the sample from 'other' is prefered.
@@ -332,7 +334,7 @@ class Samples(UserList[S]):
         samples |= other
         return samples
 
-    def __ior__(self, other: "Samples") -> "Samples":
+    def __ior__(self, other: Samples) -> Samples:
         if self.__class__.__name__ != other.__class__.__name__:
             raise MergeSamplesTypeError(f"Cannot merge {self.__class__} with {other.__class__}")
 
@@ -341,24 +343,25 @@ class Samples(UserList[S]):
 
         return self
 
-    def __and__(self, other: "Samples") -> "Samples":
+
+
+    def __and__(self, other: Samples) -> Samples:
         """Returns a Samples object with samples from both self and other, merging attributes."""
         samples = deepcopy(self)
         samples &= other
         return samples
 
 
-    def __iand__(self, other: "Samples") -> "Samples":
+    def __iand__(self, other: Samples) -> Samples:
         if self.__class__.__name__ != other.__class__.__name__:
             raise MergeSamplesTypeError(f"Cannot merge {self.__class__} with {other.__class__}")
-
         for field_ in fields_dict(self.__class__):
             self_ = getattr(self, field_)
             other_ = getattr(other, field_)
             setattr(self, field_, self.merge(field_, self_, other_))
         return self
 
-    def __xor__(self, other: "Samples") -> "Samples":
+    def __xor__(self, other: Samples) -> Samples:
         """Replace all attributes and samples in 'self' with those from 'other', effectively
         replacing 'self' with a copy of 'other'.
         """
@@ -366,11 +369,9 @@ class Samples(UserList[S]):
         samples ^= other
         return samples
 
-
-    def __ixor__(self, other: "Samples") -> "Samples":
+    def __ixor__(self, other: Samples) -> Samples:
         if self.__class__.__name__ != other.__class__.__name__:
             raise MergeSamplesTypeError(f"Cannot merge {self.__class__} with {other.__class__}")
-
         for field_ in fields_dict(self.__class__):
             other_ = getattr(other, field_)
             setattr(self, field_, other_)
@@ -400,7 +401,7 @@ class Samples(UserList[S]):
         return this | that
 
     @classmethod
-    def from_file(cls, path: Path) -> "Samples":
+    def from_file(cls, path: Path) -> Samples:
         """Get samples from a YAML file"""
         samples = []
         yaml = YAML(typ="safe")
@@ -412,7 +413,7 @@ class Samples(UserList[S]):
         return cls(samples)
 
     @classmethod
-    def with_mixins(cls, mixins: Sequence[type["Samples"]]) -> type["Samples"]:
+    def with_mixins(cls, mixins: Sequence[type[Samples]]) -> type[Samples]:
         """Returns a new Samples class with the specified mixins as base classes.
 
         Internally called by Cellophane with the samples mixins specified
@@ -432,7 +433,7 @@ class Samples(UserList[S]):
         return _apply_mixins(cls, mixins, sample_class=cls.sample_class)
 
     @classmethod
-    def with_sample_class(cls, sample_class: type["Sample"]) -> type["Samples"]:
+    def with_sample_class(cls, sample_class: type[Sample]) -> type[Samples]:
         """Returns a new Samples class with the specified sample class as the
         class to use for samples.
 
@@ -449,9 +450,9 @@ class Samples(UserList[S]):
             type: The new class with the sample class applied.
 
         """
-        return type(cls.__name__, (cls,), {"sample_class": sample_class})
+        return type(cls.__name__, (cls,), {"sample_class": sample_class})  # ty: ignore[invalid-return-type]
 
-    def split(self, by: str | None = "uuid") -> Iterable[tuple[Any, "Samples[S]"]]:
+    def split(self, by: str | None = "uuid") -> Iterable[tuple[Any, Samples[S]]]:
         """Splits the data into groups based on the specified attribute value.
 
         Args:
@@ -462,7 +463,7 @@ class Samples(UserList[S]):
 
         Yields:
         ------
-            Iterable[tuple[Any, Samples]]: An iterable of tuples containing the
+            Iterable[tuple[Any, Samples[S]]]: An iterable of tuples containing the
                 linked attribute value and a Samples object containing the
                 samples with that attribute value.
 
@@ -533,7 +534,7 @@ class Samples(UserList[S]):
         return {s.id for s in self}
 
     @property
-    def with_files(self) -> "Samples":
+    def with_files(self) -> Samples:
         """Get only samples with existing files from a Samples object.
 
         Returns
@@ -547,7 +548,7 @@ class Samples(UserList[S]):
         return instance
 
     @property
-    def without_files(self) -> "Samples":
+    def without_files(self) -> Samples:
         """Get only samples without existing files from a Samples object.
 
         Returns
@@ -561,7 +562,7 @@ class Samples(UserList[S]):
         return instance
 
     @property
-    def complete(self) -> "Samples":
+    def complete(self) -> Samples:
         """Get only completed samples from a Samples object.
 
         Samples are considered as completed if all runners have completed
@@ -578,7 +579,7 @@ class Samples(UserList[S]):
         return instance
 
     @property
-    def unprocessed(self) -> "Samples":
+    def unprocessed(self) -> Samples:
         """Get only completed samples from a Samples object.
 
         Samples are considered as completed if all runners have completed
@@ -595,7 +596,7 @@ class Samples(UserList[S]):
         return instance
 
     @property
-    def failed(self) -> "Samples":
+    def failed(self) -> Samples:
         """Get only failed samples from a Samples object.
 
         Samples are considered as failed if one or more of the runners has not

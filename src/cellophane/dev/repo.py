@@ -1,13 +1,14 @@
 """Repo classes for the cellophane dev command-line interface."""
+from __future__ import annotations
 
 import json
 import re
 from functools import cached_property
 from pathlib import Path
 from tempfile import mkdtemp
-from typing import Any, Iterator
+from typing import TYPE_CHECKING
 
-from git import Commit, GitCommandError, InvalidGitRepositoryError, Repo
+from git import GitCommandError, InvalidGitRepositoryError, Repo
 from packaging.version import Version as PyPIVersion
 from semver import Version
 
@@ -17,6 +18,11 @@ from .exceptions import (
     InvalidModulesRepoError,
     InvalidProjectRepoError,
 )
+
+if TYPE_CHECKING:
+    from typing import Any, Iterator
+
+    from git import Commit
 
 
 class ModulesRepo(Repo):

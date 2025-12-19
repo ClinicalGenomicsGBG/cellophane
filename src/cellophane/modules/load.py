@@ -1,10 +1,11 @@
 """Module loader for cellophane modules."""
+from __future__ import annotations
 
 import asyncio as aio
 import sys
 from importlib.util import module_from_spec, spec_from_file_location
-from pathlib import Path
 from site import addsitedir
+from typing import TYPE_CHECKING
 
 from cellophane.data import Sample, Samples
 from cellophane.executors import Executor, MockExecutor, SubprocessExecutor
@@ -13,13 +14,16 @@ from cellophane.util import freeze_logs, is_instance_or_subclass
 from .hook import ExceptionHook, PostHook, PreHook, resolve_dependencies
 from .runner_ import Runner
 
-MODULE_CONTENTS = tuple[
-    list[PreHook | PostHook | ExceptionHook],
-    list[Runner],
-    list[type[Sample]],
-    list[type[Samples]],
-    list[type[Executor]],
-]
+if TYPE_CHECKING:
+    from pathlib import Path
+    from typing import TypeAlias
+    MODULE_CONTENTS: TypeAlias = tuple[
+        list[PreHook | PostHook | ExceptionHook],
+        list[Runner],
+        list[type[Sample]],
+        list[type[Samples]],
+        list[type[Executor]],
+    ]
 
 
 async def _async_load(file: Path) -> MODULE_CONTENTS:

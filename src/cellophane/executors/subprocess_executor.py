@@ -1,17 +1,22 @@
 """Executor using subprocess."""
+from __future__ import annotations
 
 import os
 import shlex
 import subprocess as sp  # nosec
-from logging import LoggerAdapter
-from pathlib import Path
-from typing import Any
-from uuid import UUID
+from typing import TYPE_CHECKING
 
 import psutil
 from attrs import define, field
 
 from .executor import Executor
+
+if TYPE_CHECKING:
+    from logging import LoggerAdapter
+    from pathlib import Path
+    from typing import Any
+    from uuid import UUID
+
 
 
 @define(slots=False, init=False)
@@ -35,7 +40,7 @@ class SubprocessExecutor(Executor, name="subprocess"):
     ) -> None:
         """Execute a command."""
         del kwargs  # Unused
-        logdir = self.config.logdir / "subprocess"
+        logdir = self.config.logdir / "subprocess"  # ty: ignore[unsupported-operator]
         logdir.mkdir(parents=True, exist_ok=True)
 
         with (

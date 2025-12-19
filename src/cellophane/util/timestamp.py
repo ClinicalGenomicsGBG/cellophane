@@ -1,7 +1,12 @@
-from time import gmtime, localtime, strftime, struct_time, time
+from __future__ import annotations
+
+from time import gmtime, localtime, strftime, time
+from typing import TYPE_CHECKING
 
 from attrs import define, field
 
+if TYPE_CHECKING:
+    from time import struct_time
 
 @define(frozen=True)
 class Timestamp:

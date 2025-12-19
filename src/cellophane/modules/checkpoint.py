@@ -1,19 +1,25 @@
+from __future__ import annotations
+
 import json
 from contextlib import suppress
 from functools import cached_property
 from pathlib import Path
 from random import randbytes
-from typing import Any, Iterator, Sequence
+from typing import TYPE_CHECKING
 from warnings import warn
 
 from attrs import define, field
 from dill import dumps
 from xxhash import xxh3_64
 
-from cellophane.cfg import Config
-from cellophane.data import Output, OutputGlob, Samples
+from cellophane.data import Output, OutputGlob
 from cellophane.util import Timestamp
 
+if TYPE_CHECKING:
+    from typing import Any, Iterator, Sequence
+
+    from cellophane.cfg import Config
+    from cellophane.data import Samples
 
 @define
 class Checkpoint:
@@ -66,6 +72,7 @@ class Checkpoint:
                     workdir=self.workdir,
                     # Only src is considered, so using the current time works
                     # since timestamps are never included in src paths
+                    # FIXME: Use a sentinel value for no timestamp instead
                     timestamp=Timestamp(),
                     _warnings=False,
                 )
@@ -236,18 +243,18 @@ class Checkpoints:
 
     def __attrs_post_init__(self, *args: Any, **kwargs: Any) -> None:
         del args, kwargs
-        self.base_path = self.config.workdir / self.config.tag / "checkpoints"
+        self.base_path = self.config.workdir / self.config.tag / "checkpoints"  # ty: ignore[unsupported-operator]
         self.base_path.mkdir(parents=True, exist_ok=True)
 
     def __getattr__(self, key: str) -> Checkpoint:
         if key not in self._checkpoints:
-            self._checkpoints[key] = Checkpoint(
+            self._checkpoints[key] = Checkpoint( # ty: ignore[missing-argument]
                 label=key,
                 base_path=self.base_path,
                 prefix=self.prefix,
                 workdir=self.workdir,
                 config=self.config,
-                samples=self.samples,
+                samples=self.samples, # ty: ignore[unknown-argument]
             )
 
         return self._checkpoints[key]

@@ -1,6 +1,10 @@
 """Merger implementation for reconciling data."""
+from __future__ import annotations
 
-from typing import Any, Callable
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import Any, Callable
 
 
 class Merger:

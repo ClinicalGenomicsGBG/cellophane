@@ -1,40 +1,54 @@
 """Executors for running external scripts as jobs."""
+from __future__ import annotations
+
 import logging
-import multiprocessing as mp
 import os
 import shlex
 import sys
 from inspect import signature
-from multiprocessing.synchronize import Lock
+from multiprocessing import Lock
 from pathlib import Path
 from time import sleep
-from typing import Any, Callable, ClassVar, TypeVar
-from uuid import UUID, uuid4
+from typing import TYPE_CHECKING, ClassVar
+from uuid import uuid4
 from warnings import warn
 
 from attrs import define, field
 from mpire import WorkerPool
-from mpire.async_result import AsyncResult
 from mpire.exception import InterruptWorker
 from ruamel.yaml import YAML
 
-from cellophane import cfg, data, logs
+from cellophane.data import PreservedDict
+from cellophane.logs import handle_warnings, redirect_logging_to_queue
 
+if TYPE_CHECKING:
+    from multiprocessing.queues import Queue
+    from multiprocessing.synchronize import Lock as LockType
+    from typing import Any, Callable, TypeVar
+    from uuid import UUID
+
+    from mpire.async_result import AsyncResult
+
+    from cellophane.cfg import Config
+    T = TypeVar("T", bound="Executor")
+
+
+_LOCKS: dict[UUID, dict[UUID, LockType]] = {}
+_POOLS: dict[UUID, WorkerPool] = {}
 _ROOT = Path(__file__).parent
 
 class ExecutorSubmitException(Exception):
     """Exception raised when trying to access a terminated executor."""
-
 
 @define(slots=False, init=False)
 class Executor:
     """Executor base class."""
 
     name: ClassVar[str]
-    config: cfg.Config
+    config: Config
     workdir_base: Path
-    _locks: dict[UUID, Lock] = field(init=False)
-    _log_queue: mp.Queue = field(repr=False, init=False)
+    _locks: dict[UUID, LockType] = field(init=False)
+    _log_queue: Queue = field(repr=False, init=False)
     _pool: WorkerPool | None = field(default=None, init=False)
     _pools: dict[UUID, WorkerPool] = field(factory=dict, init=False, repr=False)
     _dispatcher: Any = field(default=None, init=False, repr=False)
@@ -52,9 +66,9 @@ class Executor:
         elif not hasattr(cls, "name"):
             cls.name = cls.__name__.lower()
 
-    def __init__(self, *args: Any, log_queue: mp.Queue, dispatcher: Any = None, **kwargs: Any) -> None:
+    def __init__(self, *args: Any, log_queue: Queue, dispatcher: Any = None, **kwargs: Any) -> None:
         """Initialize the executor."""
-        self.__attrs_init__(*args, **kwargs)
+        self.__attrs_init__(*args, **kwargs)  # ty: ignore[unresolved-attribute]
         self._locks = {}
         self._log_queue = log_queue
         self._pool = None
@@ -68,12 +82,11 @@ class Executor:
             "_pools": {},
         }
 
-    T = TypeVar("T", bound="Executor")
     def __enter__(self: T) -> T:
         """Enter the context manager."""
         return self
 
-    def __exit__(self, *args: object) -> None:
+    def __exit__(self, *args: Any) -> None:
         """Exit the context manager."""
         self.terminate()
 
@@ -85,7 +98,7 @@ class Executor:
         job_name: str,
         uuid: UUID,
         logger: logging.LoggerAdapter,
-        lock: Lock,
+        lock: LockType,
         dispatcher: Any,
         pool: WorkerPool,
     ) -> Callable[[Any | BaseException], None]:
@@ -111,7 +124,7 @@ class Executor:
 
     def _target(
         self,
-        log_queue: mp.Queue,
+        log_queue: Queue,
         *args: str | Path,
         name: str,
         uuid: UUID,
@@ -120,14 +133,14 @@ class Executor:
         os_env: bool,
         cpus: int,
         memory: int,
-        config: cfg.Config,
+        config: Config,
         conda_spec: dict | None,
     ) -> None:
         """Target function for the executor."""
         self._log_queue = log_queue
         sys.stdout = sys.stderr = open(os.devnull, "w", encoding="utf-8")
-        logs.redirect_logging_to_queue(log_queue)
-        logs.handle_warnings()
+        redirect_logging_to_queue(log_queue)
+        handle_warnings()
         logger = logging.LoggerAdapter(logging.getLogger(), {"label": name})
 
         workdir_ = workdir or self.workdir_base / f"{name}.{uuid.hex}.{self.name}"
@@ -141,7 +154,7 @@ class Executor:
         if conda_spec:
             yaml = YAML(typ="safe")
             yaml.representer.add_representer(
-                data.PreservedDict,
+                PreservedDict,
                 lambda dumper, data: dumper.represent_dict(data)
             )
             conda_env_spec = workdir_ / f"{name}.{uuid.hex}.environment.yaml"
@@ -205,7 +218,7 @@ class Executor:
         os_env: bool,
         cpus: int,
         memory: int,
-        config: cfg.Config,
+        config: Config,
         logger: logging.LoggerAdapter,
         stderr: Path,
         stdout: Path,
@@ -295,7 +308,7 @@ class Executor:
 
         _name = name or f"{self.__class__.name}_job"
         logger = logging.LoggerAdapter(logging.getLogger(), {"label": _name})
-        self._locks[_uuid] = mp.Lock()
+        self._locks[_uuid] = Lock()
         self._locks[_uuid].acquire()
         self._pools[_uuid] = WorkerPool(
             n_jobs=1,

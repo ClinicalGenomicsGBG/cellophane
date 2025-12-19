@@ -1,9 +1,14 @@
 """Miscellaneous utility functions."""
+from __future__ import annotations
 
-import logging
-from typing import Any, ParamSpec, Protocol, TypeVar
+from logging import CRITICAL, root
+from typing import TYPE_CHECKING, ParamSpec, Protocol, TypeVar
 
 from attrs import define, field
+
+if TYPE_CHECKING:
+    from logging import Handler, Logger
+    from typing import Any
 
 
 def is_instance_or_subclass(obj: Any, class_or_tuple: type | tuple[type, ...]) -> bool:
@@ -49,16 +54,16 @@ class freeze_logs:
 
     """
 
-    logger: logging.Logger = field(default=logging.root)
-    original_handlers: set[logging.Handler] = field(factory=set)
-    original_level: int = field(default=logging.CRITICAL)
+    logger: Logger = field(default=root)
+    original_handlers: set[Handler] = field(factory=set)
+    original_level: int = field(default=CRITICAL)
 
     def __enter__(self) -> None:
         self.original_level = self.logger.level
         self.original_handlers = {*self.logger.handlers}
-        self.logger.setLevel(logging.CRITICAL + 1)
+        self.logger.setLevel(CRITICAL + 1)
 
-    def __exit__(self, *args: object, **kwargs: Any) -> None:
+    def __exit__(self, *args: Any, **kwargs: Any) -> None:
         del args, kwargs  # Unused
         for handler in {*self.logger.handlers} ^ self.original_handlers:
             handler.close()

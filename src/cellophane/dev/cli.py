@@ -1,8 +1,9 @@
 """CLI for managing cellophane projects"""
+from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING
 
 import rich_click as click
 
@@ -27,6 +28,8 @@ from .util import (
     update_requirements,
 )
 
+if TYPE_CHECKING:
+    from typing import Literal
 
 @click.group(
     context_settings={

@@ -1,16 +1,20 @@
 """Configuration object based on a schema."""
+from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING
 
 from attrs import define, field
 
-from cellophane import data
+from cellophane.data import Container
 
 from .schema import Schema
 
+if TYPE_CHECKING:
+    from typing import Any
+
 
 @define(init=False, slots=False)
-class Config(data.Container):
+class Config(Container):
     """Represents a configuration object based on a schema.
 
     Attributes:
@@ -47,11 +51,6 @@ class Config(data.Container):
 
     __schema__: Schema = field(repr=False, factory=Schema, init=False)
 
-    def __init__(
-        self,
-        schema: Schema,
-        _data: dict | None = None,
-        **kwargs: Any,
-    ) -> None:
+    def __init__(self, schema: Schema, _data: dict | None = None, **kwargs: Any) -> None:
         self.__schema__ = schema
         super().__init__(_data=_data, **kwargs)

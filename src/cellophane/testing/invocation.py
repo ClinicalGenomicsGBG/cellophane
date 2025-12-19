@@ -1,22 +1,29 @@
+from __future__ import annotations
+
 import logging
 import shlex
 from copy import deepcopy
 from functools import partial
 from pathlib import Path
 from textwrap import dedent
-from typing import Iterator
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from click.testing import CliRunner
 from coverage import Coverage
-from pytest import Config, FixtureRequest, LogCaptureFixture, fixture
-from pytest_mock import MockerFixture, MockType
-from pytest_subprocess import FakeProcess
-from pytest_subprocess.fake_process import ProcessRecorder
+from pytest import fixture
 
 from cellophane import cellophane
 
 from .util import PathDict
+
+if TYPE_CHECKING:
+    from typing import Iterator
+
+    from pytest import Config, FixtureRequest, LogCaptureFixture
+    from pytest_mock import MockerFixture, MockType
+    from pytest_subprocess.fake_process import FakeProcess, ProcessRecorder
+
 
 
 def _mock_python_calls(
@@ -179,7 +186,7 @@ def deferred_invocation(
     _subprocess_mocks = override_kwargs.get(
         "subprocess_mocks", request.cls.subprocess_mocks
     )
-    _extenal_root = Path(request.fspath).parent
+    _extenal_root = Path(request.fspath).parent  # ty: ignore[unresolved-attribute]
 
     cli_runner = CliRunner()
     with (

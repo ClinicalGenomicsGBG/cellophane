@@ -1,17 +1,16 @@
 """Utility functions for working with YAML configuration files"""
+from __future__ import annotations
 
 import re
 from functools import partial
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
 
 from ruamel.yaml import (
     YAML,
-    CommentedMap,
     CommentToken,
     Loader,
     MappingNode,
-    Node,
     ScalarNode,
     SequenceNode,
     YAMLError,
@@ -19,11 +18,18 @@ from ruamel.yaml import (
 from ruamel.yaml.compat import StringIO
 from ruamel.yaml.error import CommentMark
 
-from cellophane import data, util
+from cellophane.data import PreservedDict
+from cellophane.util import merge_mappings
+
+if TYPE_CHECKING:
+    from typing import Any
+
+    from ruamel.yaml import CommentedMap, Loader, Node
 
 
 class _BLANK:
     """Represents a blank value in YAML"""
+
 
 def extract_parens(value: str, open: str = "(", close: str = ")") -> str:
     _iter = iter(value)
@@ -46,7 +52,7 @@ def dump_yaml(data_: Any) -> str:
         # Representer for preserved dicts
 
         yaml.representer.add_representer(
-            data.PreservedDict,
+            PreservedDict,
             lambda dumper, data: dumper.represent_dict(data),
         )
         # Representer for null as ~
@@ -112,13 +118,14 @@ def comment_yaml_block(
     # Add back value as a comment token
     node_ca.append(CommentToken(commented_block, CommentMark(0)))
 
+
 def _include(loader: Loader, sufix: str, node: Node, root: Path | None) -> Any:
     include_names = re.split(r"[:;,|]", sufix.removeprefix(":"))
     include_paths = [(root / n) if root is not None else Path(n) for n in include_names]
     yaml = YAML(typ="safe")
     include_data = yaml.load(include_paths[0])
     for path in include_paths[1:]:
-        include_data = util.merge_mappings(include_data, yaml.load(path))
+        include_data = merge_mappings(include_data, yaml.load(path))
 
     match node:
         case MappingNode():
@@ -134,7 +141,7 @@ def _include(loader: Loader, sufix: str, node: Node, root: Path | None) -> Any:
         case _:
             raise YAMLError(f"Unsupported node type for '!import': {node.__class__.__name__}")
 
-    return util.merge_mappings(include_data, node_data)
+    return merge_mappings(include_data, node_data)
 
 
 def inclusive_yaml(root: Path | None = None) -> YAML:

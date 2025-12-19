@@ -1,17 +1,19 @@
 """Utility functions for cellophane dev command-line interface."""
+from __future__ import annotations
 
 import logging
 import re
 from contextlib import suppress
 from pathlib import Path
 from textwrap import dedent
-from typing import Iterable, Literal
+from typing import TYPE_CHECKING
 
-from git import Commit, GitCommandError, IndexFile, Repo
+from git import GitCommandError, Repo
 from questionary import Choice, checkbox, select
 from rich.console import Console
 
-from cellophane import CELLOPHANE_ROOT, Schema
+from cellophane import CELLOPHANE_ROOT
+from cellophane.cfg import Schema
 
 from .exceptions import (
     InvalidModulesError,
@@ -21,6 +23,10 @@ from .exceptions import (
 )
 from .repo import ProjectRepo
 
+if TYPE_CHECKING:
+    from typing import Iterable, Literal
+
+    from git import Commit, IndexFile
 
 def update_requirements(path: Path) -> None:
     """Update the requirements file for the project.

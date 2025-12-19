@@ -1,25 +1,32 @@
+from __future__ import annotations
+
 from copy import deepcopy
 from functools import partial, wraps
 from logging import LoggerAdapter, getLogger
-from multiprocessing import Lock, Queue
-from multiprocessing.synchronize import Lock as LockType
-from pathlib import Path
-from typing import Any, Callable, Literal, Sequence, overload
-from uuid import UUID
+from multiprocessing import Lock
+from typing import TYPE_CHECKING, overload
 
 from mpire.exception import InterruptWorker
 from mpire.pool import WorkerPool
 
-from cellophane.cfg import Config
-from cellophane.cleanup import Cleaner, DeferredCleaner
-from cellophane.data import Samples
-from cellophane.executors.executor import Executor
 from cellophane.logs import handle_warnings, redirect_logging_to_queue
-from cellophane.util import Timestamp
 
 from .checkpoint import Checkpoints
 from .hook import ExceptionHook, PostHook, PreHook
-from .runner_ import Runner
+
+if TYPE_CHECKING:
+    from multiprocessing import Queue
+    from multiprocessing.synchronize import Lock as LockType
+    from pathlib import Path
+    from typing import Any, Callable, Literal, Sequence
+    from uuid import UUID
+
+    from cellophane.cfg import Config
+    from cellophane.cleanup import Cleaner, DeferredCleaner
+    from cellophane.data import Samples
+    from cellophane.executors.executor import Executor
+    from cellophane.modules import Runner
+    from cellophane.util import Timestamp
 
 
 def _poolable(func: Callable) -> Callable:

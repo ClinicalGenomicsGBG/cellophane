@@ -1,15 +1,20 @@
 """Cleaner class for cleaning up files and directories."""
+from __future__ import annotations
 
 from copy import copy
 from functools import cached_property
-from logging import LoggerAdapter
 from pathlib import Path
 from shutil import rmtree
-from typing import Literal
+from typing import TYPE_CHECKING
 from warnings import warn
 
 from attrs import define, field
 from humanfriendly.text import pluralize
+
+if TYPE_CHECKING:
+    from logging import LoggerAdapter
+    from typing import Literal
+
 
 
 def _resolve_path(path: Path, root: Path) -> Path:

@@ -1,14 +1,22 @@
+from __future__ import annotations
+
 import logging
 import re
 import sys
 from pathlib import Path
 from traceback import format_exception
-from typing import Any, Iterable
+from typing import TYPE_CHECKING, Iterable
 
-import pytest
+from pytest import fixture, hookimpl
+
+if TYPE_CHECKING:
+    from typing import Any
+
+    from pytest import CallInfo, Config, Item, TestReport
 
 
-@pytest.fixture(scope="function", autouse=True)
+
+@fixture(scope="function", autouse=True)
 def housekeeping() -> Iterable[None]:
     # Add the tests/site to the Python path to override config.py
     sys.path.insert(0, str(Path(__file__).parent / "site"))
@@ -30,17 +38,15 @@ def housekeeping() -> Iterable[None]:
     logging.root.manager.loggerDict.clear()
 
 
-@pytest.hookimpl(wrapper=True)
-def pytest_runtest_makereport(
-    item: pytest.Item, call: pytest.CallInfo
-) -> Iterable[pytest.TestReport]:
+@hookimpl(wrapper=True)
+def pytest_runtest_makereport(item: Item, call: CallInfo) -> Iterable[TestReport]:
     """Hook to add commandline, logs and output to test reports."""
     del call  # Unused
 
     # NOTE: This syntax is a bit esoteric, and mypy doesn't like it
     # but this is paraphrased from the pytest docs
-    report: pytest.TestReport = yield  # type: ignore[misc, assignment]
-    if invocation_ := item.funcargs.get("invocation"):
+    report: TestReport = yield  # type: ignore[misc, assignment]
+    if invocation_ := item.funcargs.get("invocation"):  # ty: ignore[unresolved-attribute]
         _traceback = "".join(format_exception(invocation_.exception))
         report.sections.append(("Args", " ".join(invocation_.args)))
         report.sections.append(("stdout/stderr", invocation_.output))
@@ -80,7 +86,7 @@ def _is_regex_or_literal(obj: Any) -> bool:
     return _is_regex(obj) or _is_literal(obj)
 
 
-@pytest.hookimpl()
+@hookimpl()
 def pytest_assertrepr_compare(op: str, left: Any, right: Any) -> list[str] | None:
     if not any(_is_regex_or_literal(obj) for obj in (left, right)):
         # No regexes in the comparison
@@ -130,8 +136,8 @@ def pytest_assertrepr_compare(op: str, left: Any, right: Any) -> list[str] | Non
     return _repr
 
 
-@pytest.hookimpl()
-def pytest_configure(config: pytest.Config) -> None:
+@hookimpl()
+def pytest_configure(config: Config) -> None:
     config.addinivalue_line(
         "markers",
         "override(structure,args,mocks,subprocess_mocks): "

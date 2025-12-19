@@ -2,7 +2,7 @@
 
 from .freeze import freeze, frozenlist, unfreeze
 from .mappings import map_nested_keys, merge_mappings
-from .misc import freeze_logs, is_instance_or_subclass
+from .misc import NamedCallable, freeze_logs, is_instance_or_subclass
 from .timestamp import Timestamp
 
 __all__ = [
@@ -14,4 +14,5 @@ __all__ = [
     "is_instance_or_subclass",
     "freeze_logs",
     "Timestamp",
+    "NamedCallable",
 ]

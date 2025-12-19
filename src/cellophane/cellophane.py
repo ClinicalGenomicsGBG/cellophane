@@ -4,7 +4,6 @@ import time
 from importlib.metadata import version
 from importlib.util import find_spec
 from logging import LoggerAdapter, getLogger
-from multiprocessing import Queue
 from pathlib import Path
 from typing import Any
 
@@ -16,7 +15,6 @@ from cellophane import executors
 from cellophane.cfg import Config, Schema, with_options
 from cellophane.cleanup import Cleaner
 from cellophane.data import OutputGlob, Sample, Samples
-from cellophane.executors import Executor
 from cellophane.logs import (
     ExternalFilter,
     handle_warnings,
@@ -24,7 +22,7 @@ from cellophane.logs import (
     setup_file_handler,
     start_logging_queue_listener,
 )
-from cellophane.modules import Hook, Runner, load, run_hooks, start_runners
+from cellophane.modules import Dispatcher, load
 from cellophane.util import Timestamp
 
 spec = find_spec("cellophane")
@@ -117,28 +115,35 @@ def cellophane(label: str, root: Path) -> click.Command:
             logger.debug(f"Using {executor_cls.name} executor")
 
             config.analysis = label  # type: ignore[attr-defined]
+            dispatcher = Dispatcher(
+                hooks=hooks,
+                runners=runners,
+                config=config,
+                root=root,
+                executor_cls=executor_cls,
+                log_queue=log_queue,
+                timestamp=start_time,
+                logger=logger,
+            )
+
 
             try:
                 _main(
-                    hooks=hooks,
-                    runners=runners,
                     samples_class=_SAMPLES,
                     config=config,
                     logger=logger,
-                    log_queue=log_queue,
-                    root=root,
-                    executor_cls=executor_cls,
-                    timestamp=start_time,
+                    dispatcher=dispatcher,
                 )
 
             except Exception as exc:
                 logger.critical(f"Unhandled exception: {exc!r}", exc_info=True)
-                log_listener.stop()
+                dispatcher.run_exception_hooks(exception=exc)
                 raise SystemExit(1) from exc
-
-            time_elapsed = format_timespan(time.time() - start_time)
-            logger.info(f"Execution complete in {time_elapsed}")
-            log_listener.stop()
+            else:
+                time_elapsed = format_timespan(time.time() - start_time)
+                logger.info(f"Execution complete in {time_elapsed}")
+            finally:
+                log_listener.stop()
 
     except Exception as exc:
         logger.critical(exc)
@@ -148,15 +153,10 @@ def cellophane(label: str, root: Path) -> click.Command:
 
 
 def _main(
-    hooks: list[Hook],
-    runners: list[Runner],
     samples_class: type[Samples],
     logger: LoggerAdapter,
-    log_queue: Queue,
     config: Config,
-    root: Path,
-    executor_cls: type[Executor],
-    timestamp: Timestamp,
+    dispatcher: Dispatcher,
 ) -> None:
     """Run cellophane"""
     # Load samples from file, or create empty samples object
@@ -172,18 +172,10 @@ def _main(
     cleaner.register(config.logfile, ignore_outside_root=True)
 
     # Run pre-hooks
-    samples = run_hooks(
-        hooks,
-        when="pre",
+    samples = dispatcher.run_pre_hooks(
         per="session",
         samples=samples,
-        log_queue=log_queue,
-        config=config,
-        root=root,
-        executor_cls=executor_cls,
-        timestamp=timestamp,
         cleaner=cleaner,
-        logger=logger,
     )
 
     # Validate sample files
@@ -195,34 +187,17 @@ def _main(
 
     # Start runners for unprocessed samples and mergeback failed samples after
     samples = (
-        start_runners(
-            runners=runners,
+        dispatcher.start_runners(
             samples=samples.unprocessed,
-            logger=logger,
-            log_queue=log_queue,
-            config=config,
-            root=root,
-            executor_cls=executor_cls,
-            timestamp=timestamp,
             cleaner=cleaner,
-            hooks=hooks,
-        )
-        | samples.failed
+        ) | samples.failed
     )
 
     # Run post-hooks
-    samples = run_hooks(
-        hooks,
-        when="post",
+    samples = dispatcher.run_post_hooks(
         per="session",
         samples=samples,
-        config=config,
-        log_queue=log_queue,
-        root=root,
-        executor_cls=executor_cls,
-        timestamp=timestamp,
         cleaner=cleaner,
-        logger=logger,
     )
 
     # If there are failed samples, unregister the workdir from the cleaner

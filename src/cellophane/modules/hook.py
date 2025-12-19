@@ -1,19 +1,14 @@
-import time
-from copy import deepcopy
-from functools import partial
 from graphlib import TopologicalSorter
 from logging import LoggerAdapter, getLogger
-from multiprocessing import Queue
+from multiprocessing.queues import Queue
 from pathlib import Path
-from typing import Callable, Literal, Sequence
-
-from mpire.exception import InterruptWorker
+from typing import Any, Literal, TypeAlias
 
 from cellophane.cfg import Config
 from cellophane.cleanup import Cleaner, DeferredCleaner
 from cellophane.data import Samples
 from cellophane.executors import Executor
-from cellophane.util import Timestamp
+from cellophane.util import NamedCallable, Timestamp
 
 from .checkpoint import Checkpoints
 
@@ -24,29 +19,29 @@ class _AFTER_ALL: ...
 class _BEFORE_ALL: ...
 
 
-DEPENDENCY_TYPE = str | list[type[_BEFORE_ALL] | type[_AFTER_ALL] | str] | None
+DEPENDENCY_TYPE: TypeAlias = list[type[_BEFORE_ALL] | type[_AFTER_ALL] | str]
 
 
-class Hook:
-    """Base class for cellophane pre/post-hooks."""
+class _BaseHook:
+    """Base class for cellophane hooks."""
 
     name: str
     label: str
-    func: Callable
-    when: Literal["pre", "post"]
-    condition: Literal["always", "complete", "failed"]
+    func: NamedCallable
+    when: Literal["pre", "post", "exception"]
+    condition: Literal["always", "complete", "unprocessed", "failed"]
     before: DEPENDENCY_TYPE
     after: DEPENDENCY_TYPE
     per: Literal["session", "sample", "runner"] = "session"
 
     def __init__(
         self,
-        func: Callable,
-        when: Literal["pre", "post"],
+        func: NamedCallable,
+        when: Literal["pre", "post", "exception"],
         label: str | None = None,
-        condition: Literal["always", "complete", "failed"] = "always",
-        before: DEPENDENCY_TYPE = None,
-        after: DEPENDENCY_TYPE = None,
+        condition: Literal["always", "complete", "unprocessed", "failed"] = "always",
+        before: str | DEPENDENCY_TYPE | None = None,
+        after: str | DEPENDENCY_TYPE | None = None,
         per: Literal["session", "sample", "runner"] = "session",
     ) -> None:
         if isinstance(before, str) and before != "all":
@@ -91,48 +86,191 @@ class Hook:
 
     def __call__(
         self,
-        samples: Samples,
         config: Config,
         root: Path,
         executor_cls: type[Executor],
         log_queue: Queue,
         timestamp: Timestamp,
-        cleaner: Cleaner,
-        checkpoints: Checkpoints,
-    ) -> Samples:
+        dispatcher: Any,
+        **kwargs: Any,
+    ) -> Any:
         logger = LoggerAdapter(getLogger(), {"label": self.label})
         logger.debug(f"Running {self.label} hook")
-        _workdir = config.workdir / config.tag
+        _workdir = config.workdir / config.tag  # ty: ignore[unsupported-operator]
         with executor_cls(
             config=config,
             log_queue=log_queue,
             workdir_base=_workdir,
+            dispatcher=dispatcher,
         ) as executor:
-            match self.func(
-                samples=samples,
+            return self.func(
                 config=config,
                 timestamp=timestamp,
                 logger=logger,
                 root=root,
                 workdir=_workdir,
                 executor=executor,
-                cleaner=cleaner,
-                checkpoints=checkpoints,
-            ):
-                case returned if isinstance(returned, Samples):
-                    _ret = returned
-                case None:
-                    logger.debug("Hook did not return any samples")
-                    _ret = samples
-                case returned:
-                    logger.warning(f"Unexpected return type {type(returned)}")
-                    _ret = samples
+                **kwargs,
+            )
+
+
+class _PrePostHook(_BaseHook):
+    """Cellophane pre/post-hook."""
+
+    when: Literal["pre", "post"]
+
+    def __init__(
+        self,
+        func: NamedCallable,
+        when: Literal["pre", "post"],
+        label: str | None = None,
+        condition: Literal["always", "complete", "unprocessed", "failed"] = "always",
+        before: str | DEPENDENCY_TYPE | None = None,
+        after: str | DEPENDENCY_TYPE | None = None,
+        per: Literal["session", "sample", "runner"] = "session",
+    ) -> None:
+        super().__init__(
+            func,
+            when=when,
+            label=label,
+            condition=condition,
+            before=before,
+            after=after,
+            per=per,
+        )
+
+    def __call__(  # type: ignore[override]
+        self,
+        samples: Samples,
+        config: Config,
+        root: Path,
+        executor_cls: type[Executor],
+        log_queue: Queue,
+        timestamp: Timestamp,
+        cleaner: Cleaner | DeferredCleaner,
+        checkpoints: Checkpoints,
+        dispatcher: Any,
+    ) -> Samples:
+        logger = LoggerAdapter(getLogger(), {"label": self.label})
+        match super().__call__(
+            samples=samples,
+            config=config,
+            root=root,
+            executor_cls=executor_cls,
+            log_queue=log_queue,
+            timestamp=timestamp,
+            cleaner=cleaner,
+            checkpoints=checkpoints,
+            dispatcher=dispatcher,
+        ):
+            case returned if isinstance(returned, Samples):
+                _ret = returned
+            case None:
+                logger.debug("Hook did not return any samples")
+                _ret = samples
+            case returned:
+                logger.warning(f"Unexpected return type {type(returned)}")
+                _ret = samples
         return _ret
 
 
+class PreHook(_PrePostHook):
+    """Cellophane pre-hook."""
+
+    when: Literal["pre"]
+
+    def __init__(
+        self,
+        func: NamedCallable,
+        label: str | None = None,
+        condition: Literal["always", "unprocessed", "failed"] = "always",
+        before: str | DEPENDENCY_TYPE | None = None,
+        after: str | DEPENDENCY_TYPE | None = None,
+        per: Literal["session", "sample", "runner"] = "session",
+    ) -> None:
+        super().__init__(
+            func,
+            when="pre",
+            label=label,
+            condition=condition,
+            before=before,
+            after=after,
+            per=per,
+        )
+
+
+class PostHook(_PrePostHook):
+    """Cellophane post-hook."""
+
+    when: Literal["post"]
+
+    def __init__(
+        self,
+        func: NamedCallable,
+        label: str | None = None,
+        condition: Literal["always", "complete", "failed"] = "always",
+        before: str | DEPENDENCY_TYPE | None = None,
+        after: str | DEPENDENCY_TYPE | None = None,
+        per: Literal["session", "sample", "runner"] = "session",
+    ) -> None:
+        super().__init__(
+            func,
+            when="post",
+            label=label,
+            condition=condition,
+            before=before,
+            after=after,
+            per=per,
+        )
+
+
+class ExceptionHook(_BaseHook):
+    """Cellophane exception-hook."""
+
+    when: Literal["exception"]
+    condition: Literal["always"]
+
+    def __init__(
+        self,
+        func: NamedCallable,
+        label: str | None = None,
+        before: str | DEPENDENCY_TYPE | None = None,
+        after: str | DEPENDENCY_TYPE | None = None,
+    ) -> None:
+        super().__init__(
+            func,
+            when="exception",
+            label=label,
+            condition="always",
+            before=before,
+            after=after,
+            per="session",
+        )
+
+    def __call__(  # type: ignore[override]
+        self,
+        exception: BaseException,
+        config: Config,
+        root: Path,
+        executor_cls: type[Executor],
+        log_queue: Queue,
+        timestamp: Timestamp,
+        dispatcher: Any,
+    ) -> Any:
+        super().__call__(
+            exception=exception,
+            config=config,
+            root=root,
+            executor_cls=executor_cls,
+            log_queue=log_queue,
+            timestamp=timestamp,
+            dispatcher=dispatcher,
+        )
+
+
 def resolve_dependencies(
-    hooks: list[Hook],
-) -> list[Hook]:
+    hooks: list[PreHook | PostHook | ExceptionHook],
+) -> list[PreHook | PostHook | ExceptionHook]:
     """Resolves hook dependencies and returns the hooks in the resolved order.
     Uses a topological sort to resolve dependencies. If the order of two hooks
     cannot be determined, the order is not guaranteed.
@@ -161,77 +299,3 @@ def resolve_dependencies(
 
     order = [*TopologicalSorter(deps).static_order()]
     return [*sorted(hooks, key=lambda h: order.index(h.__name__))]
-
-
-def run_hooks(
-    hooks: Sequence[Hook],
-    *,
-    when: Literal["pre", "post"],
-    per: Literal["session", "sample", "runner"],
-    samples: Samples,
-    config: Config,
-    root: Path,
-    executor_cls: type[Executor],
-    log_queue: Queue,
-    timestamp: Timestamp,
-    cleaner: Cleaner | DeferredCleaner,
-    logger: LoggerAdapter,
-    checkpoint_suffix: str | None = None,
-) -> Samples:
-    """Run hooks at the specified time and update the samples object.
-
-    Args:
-    ----
-        hooks (Sequence[Hook]): The hooks to run.
-        when (Literal["pre", "post"]): The time to run the hooks.
-        samples (data.Samples): The samples object to update.
-        **kwargs (Any): Additional keyword arguments to pass to the hooks.
-
-    Returns:
-    -------
-        data.Samples: The updated samples object.
-
-    """
-    samples_ = deepcopy(samples)
-
-    for hook in [h for h in hooks if (h.when, h.per) == (when, per)]:
-        checkpoint_prefix = f"{when}-hook.{hook.name}"
-        if checkpoint_suffix:
-            checkpoint_prefix += f".{checkpoint_suffix}"
-        hook_ = partial(
-            hook,
-            config=config,
-            root=root,
-            executor_cls=executor_cls,
-            log_queue=log_queue,
-            timestamp=timestamp,
-            cleaner=cleaner,
-            checkpoints=Checkpoints(
-                samples=samples,
-                prefix=checkpoint_prefix,
-                workdir=config.workdir / config.tag,
-                config=config,
-            ),
-        )
-        if hook.when == "pre":
-            # Catch exceptions to allow post-hooks to run even if a pre-hook fails
-            try:
-                samples_ = hook_(samples=samples_)
-            except (KeyboardInterrupt, InterruptWorker):
-                logger.warning("Keyboard interrupt received, failing samples and stopping execution")
-                for sample in samples_:
-                    sample.fail(f"Hook {hook.name} interrupted")
-                break
-            except BaseException as exc:
-                logger.error(f"Exception in {hook.label}: {exc}")
-                for sample in samples_:
-                    sample.fail(f"Hook {hook.name} failed: {exc}")
-                break
-        elif hook.condition == "always":
-            samples_ = hook_(samples=samples_)
-        elif hook.condition == "complete" and (s := samples.complete):
-            samples_ = hook_(samples=s) | samples_.failed
-        elif hook.condition == "failed" and (s := samples.failed):
-            samples_ = hook_(samples=s) | samples_.complete
-
-    return samples_

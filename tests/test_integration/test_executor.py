@@ -1,5 +1,6 @@
-from cellophane.testing import BaseTest, Invocation, literal, regex
 from pytest import mark
+
+from cellophane.testing import BaseTest, Invocation, literal, regex
 
 UUID4_REGEX = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 UUID4_HEX_REGEX = r"[0-9a-f]{32}"
@@ -96,7 +97,6 @@ class Test_executor_submit(BaseTest):
                 @pre_hook()
                 def runner_a(logger, samples, executor, config, **_):
                     executor.submit("ping localhost -c 2")
-                    sleep(.1)
                     executor.terminate()
                     executor.wait()
             """,
@@ -190,7 +190,7 @@ class Test_executor_submit(BaseTest):
         self, invocation: Invocation
     ) -> None:
         assert invocation.logs == regex(
-            f"Exception in subprocess job 'subprocess_job' \\(UUID={UUID_SHORT_REGEX}\\): Exception\\('BOOM'\\)",
+            f"Unhandled exception in subprocess job 'subprocess_job' \\(UUID={UUID_SHORT_REGEX}\\): Exception\\('BOOM'\\)",
             f"Error in subprocess job 'subprocess_job' \\(UUID={UUID_SHORT_REGEX}\\)",
         )
 
@@ -218,6 +218,6 @@ class Test_executor_submit(BaseTest):
         self, invocation: Invocation
     ) -> None:
         assert invocation.logs == regex(
-            f"Exception in callback of subprocess job 'subprocess_job' \\(UUID={UUID_SHORT_REGEX}\\): Exception\\('BOOM'\\)",
+            f"Unhandled exception in callback of subprocess job 'subprocess_job' \\(UUID={UUID_SHORT_REGEX}\\): Exception\\('BOOM'\\)",
             f"Error in subprocess job 'subprocess_job' \\(UUID={UUID_SHORT_REGEX}\\)",
         )

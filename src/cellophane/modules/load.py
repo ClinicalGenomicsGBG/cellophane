@@ -10,11 +10,11 @@ from cellophane.data import Sample, Samples
 from cellophane.executors import Executor, MockExecutor, SubprocessExecutor
 from cellophane.util import freeze_logs, is_instance_or_subclass
 
-from .hook import Hook, resolve_dependencies
+from .hook import ExceptionHook, PostHook, PreHook, resolve_dependencies
 from .runner_ import Runner
 
 MODULE_CONTENTS = tuple[
-    list[Hook],
+    list[PreHook | PostHook | ExceptionHook],
     list[Runner],
     list[type[Sample]],
     list[type[Samples]],
@@ -23,7 +23,7 @@ MODULE_CONTENTS = tuple[
 
 
 async def _async_load(file: Path) -> MODULE_CONTENTS:
-    hooks: list[Hook] = []
+    hooks: list[PreHook | PostHook | ExceptionHook] = []
     runners: list[Runner] = []
     sample_mixins: list[type[Sample]] = []
     samples_mixins: list[type[Samples]] = []
@@ -42,7 +42,7 @@ async def _async_load(file: Path) -> MODULE_CONTENTS:
         raise ImportError(f"Unable to import module '{base}': {exc!r}") from exc
 
     for obj in [getattr(module, a) for a in dir(module)]:
-        if is_instance_or_subclass(obj, Hook):
+        if is_instance_or_subclass(obj, (PreHook, PostHook, ExceptionHook)):
             hooks.append(obj)
         elif is_instance_or_subclass(obj, Sample):
             sample_mixins.append(obj)

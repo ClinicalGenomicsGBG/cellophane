@@ -141,5 +141,5 @@ class Cleaner:
                 case DeferredCall("unregister", path, ignore_outside_root):
                     cleaner.unregister(path, ignore_outside_root)
                 case _:
-                    raise ValueError(f"Invalid action: {call.action}")
+                    raise ValueError(f"Invalid deferred action: {call.action}")
         return cleaner

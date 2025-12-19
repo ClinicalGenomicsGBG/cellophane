@@ -1,6 +1,7 @@
-from cellophane.testing import BaseTest, Invocation, literal
 from click import FileError
 from pytest import mark
+
+from cellophane.testing import BaseTest, Invocation, literal
 
 
 class Test_exceptions(BaseTest):
@@ -19,7 +20,7 @@ class Test_exceptions(BaseTest):
     }
 
     @mark.override(
-        mocks={"cellophane.cellophane.run_hooks": {"side_effect": Exception("DUMMY")}}
+        mocks={"cellophane.modules.dispatcher.Dispatcher.run_pre_hooks": {"side_effect": Exception("DUMMY")}}
     )
     def test_unhandled_exception(self, invocation: Invocation) -> None:
         assert invocation.logs == literal("Unhandled exception: Exception('DUMMY')")
@@ -58,7 +59,7 @@ class Test_exceptions(BaseTest):
         },
     )
     def test_merge_exception(self, invocation: Invocation) -> None:
-        assert invocation.logs == literal("Exception when merging samples: Exception('DUMMY')")
+        assert invocation.logs == literal("Unhandled exception when merging samples: Exception('DUMMY')")
         assert invocation.exit_code == 0
 
     @mark.override(
@@ -74,7 +75,7 @@ class Test_exceptions(BaseTest):
             """,
         },
         mocks={
-            "cellophane.modules.runner_.WorkerPool.apply_async": {
+            "cellophane.modules.dispatcher.WorkerPool.apply_async": {
                 "side_effect": KeyboardInterrupt
             }
         },
@@ -99,9 +100,9 @@ class Test_exceptions(BaseTest):
     )
     def test_runner_exception(self, invocation: Invocation) -> None:
         assert invocation.logs == literal(
-            "Unhandled exception: Exception('DUMMY')",
+            "Unhandled exception in runner 'runner': Exception('DUMMY')",
             "Clearing outputs and failing samples",
-            "Sample a failed - Unhandled exception in runner 'runner' Exception('DUMMY')",
-            "Sample b failed - Unhandled exception in runner 'runner' Exception('DUMMY')",
+            "Sample a failed - Unhandled exception in runner 'runner': Exception('DUMMY')",
+            "Sample b failed - Unhandled exception in runner 'runner': Exception('DUMMY')",
         )
         assert invocation.exit_code == 0

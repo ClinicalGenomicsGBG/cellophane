@@ -1,12 +1,9 @@
 """Executors for running external scripts as jobs."""
-
 import logging
 import multiprocessing as mp
 import os
 import shlex
 import sys
-from contextlib import suppress
-from functools import partial
 from inspect import signature
 from multiprocessing.synchronize import Lock
 from pathlib import Path
@@ -23,16 +20,10 @@ from ruamel.yaml import YAML
 
 from cellophane import cfg, data, logs
 
-_LOCKS: dict[UUID, dict[UUID, Lock]] = {}
-_POOLS: dict[UUID, WorkerPool] = {}
 _ROOT = Path(__file__).parent
 
-
-class ExecutorTerminatedError(Exception):
+class ExecutorSubmitException(Exception):
     """Exception raised when trying to access a terminated executor."""
-
-
-T = TypeVar("T", bound="Executor")
 
 
 @define(slots=False, init=False)
@@ -42,7 +33,11 @@ class Executor:
     name: ClassVar[str]
     config: cfg.Config
     workdir_base: Path
-    uuid: UUID = field(init=False)
+    _locks: dict[UUID, Lock] = field(init=False)
+    _log_queue: mp.Queue = field(repr=False, init=False)
+    _pool: WorkerPool | None = field(default=None, init=False)
+    _pools: dict[UUID, WorkerPool] = field(factory=dict, init=False, repr=False)
+    _dispatcher: Any = field(default=None, init=False, repr=False)
 
     def __init_subclass__(
         cls,
@@ -57,17 +52,23 @@ class Executor:
         elif not hasattr(cls, "name"):
             cls.name = cls.__name__.lower()
 
-    def __init__(self, *args: Any, log_queue: mp.Queue, **kwargs: Any) -> None:
+    def __init__(self, *args: Any, log_queue: mp.Queue, dispatcher: Any = None, **kwargs: Any) -> None:
         """Initialize the executor."""
         self.__attrs_init__(*args, **kwargs)
-        self.uuid = uuid4()
-        _POOLS[self.uuid] = WorkerPool(
-            start_method="fork",
-            daemon=False,
-            use_dill=True,
-            shared_objects=log_queue,
-        )
+        self._locks = {}
+        self._log_queue = log_queue
+        self._pool = None
+        self._dispatcher = dispatcher
 
+    def __getstate__(self) -> dict[str, Any]:
+        return self.__dict__ | {
+            "_pool": None,
+            "_log_queue": None,
+            "_locks": {},
+            "_pools": {},
+        }
+
+    T = TypeVar("T", bound="Executor")
     def __enter__(self: T) -> T:
         """Enter the context manager."""
         return self
@@ -76,37 +77,37 @@ class Executor:
         """Exit the context manager."""
         self.terminate()
 
-    @property
-    def pool(self) -> WorkerPool:
-        """Return the worker pool."""
-        try:
-            return _POOLS[self.uuid]
-        except KeyError as exc:
-            raise ExecutorTerminatedError from exc
-
-    @property
-    def locks(self) -> dict[UUID, Lock]:
-        if self.uuid not in _LOCKS:
-            _LOCKS[self.uuid] = {}
-        return _LOCKS[self.uuid]
-
+    @staticmethod
     def _callback(
-        self,
-        result: Any,
-        name: str,
-        uuid: UUID,
         fn: Callable | None,
-        msg: str,
+        *,
+        executor_name: str,
+        job_name: str,
+        uuid: UUID,
         logger: logging.LoggerAdapter,
         lock: Lock,
-    ) -> None:
+        dispatcher: Any,
+        pool: WorkerPool,
+    ) -> Callable[[Any | BaseException], None]:
         """Callback function for the executor."""
-        logger.debug(msg)
-        try:
-            (fn or (lambda _: ...))(result)
-        except Exception as exc:  # pylint: disable=broad-except
-            logger.error(f"Exception in callback of {self.name} job '{name}' (UUID={uuid.hex[:8]}): {exc!r}", exc_info=exc)
-        lock.release()
+
+        def inner(result_or_exception: Any | BaseException) -> None:
+            try:
+                match result_or_exception:
+                    case BaseException() as exc:
+                        logger.debug(f"Error in {executor_name} job '{job_name}' (UUID={uuid.hex[:8]}): {exc!r}")
+                        dispatcher.run_exception_hooks(exception=exc, pool=pool)
+                    case _:
+                        logger.debug(f"Completed {executor_name} job '{job_name}' (UUID={uuid.hex[:8]})")
+                if fn is not None:
+                    fn(result_or_exception)
+            except Exception as exc:  # pylint: disable=broad-except
+                logger.error(f"Unhandled exception in callback of {executor_name} job '{job_name}' (UUID={uuid.hex[:8]}): {exc!r}", exc_info=exc)
+                dispatcher.run_exception_hooks(exception=exc, pool=pool)
+            finally:
+                lock.release()
+
+        return inner
 
     def _target(
         self,
@@ -123,6 +124,7 @@ class Executor:
         conda_spec: dict | None,
     ) -> None:
         """Target function for the executor."""
+        self._log_queue = log_queue
         sys.stdout = sys.stderr = open(os.devnull, "w", encoding="utf-8")
         logs.redirect_logging_to_queue(log_queue)
         logs.handle_warnings()
@@ -189,7 +191,7 @@ class Executor:
                 self.terminate_hook(uuid, logger)
                 raise exc
         except Exception as exc:  # pylint: disable=broad-except
-            logger.warning(f"Exception in {self.name} job '{name}' (UUID={uuid.hex[:8]}): {exc!r}", exc_info=exc)
+            logger.warning(f"Unhandled exception in {self.name} job '{name}' (UUID={uuid.hex[:8]}): {exc!r}", exc_info=exc)
             self.terminate_hook(uuid, logger)
             raise SystemExit(1) from exc
 
@@ -288,12 +290,22 @@ class Executor:
 
         """
         _uuid = uuid or uuid4()
+        if _uuid in self._locks or _uuid in self._pools:
+            raise ExecutorSubmitException(f"Job with UUID {_uuid} is already submitted.")
+
         _name = name or f"{self.__class__.name}_job"
         logger = logging.LoggerAdapter(logging.getLogger(), {"label": _name})
-        self.locks[_uuid] = mp.Lock()
-        self.locks[_uuid].acquire()
+        self._locks[_uuid] = mp.Lock()
+        self._locks[_uuid].acquire()
+        self._pools[_uuid] = WorkerPool(
+            n_jobs=1,
+            start_method="fork",
+            daemon=False,
+            use_dill=True,
+            shared_objects=self._log_queue,
+        )
 
-        result = self.pool.apply_async(
+        result = self._pools[_uuid].apply_async(
             func=self._target,
             args=args,
             kwargs={
@@ -307,23 +319,25 @@ class Executor:
                 "memory": memory,
                 "conda_spec": conda_spec,
             },
-            callback=partial(
-                self._callback,
-                fn=callback,
-                msg=f"Completed {self.name} job '{_name}' (UUID={_uuid.hex[:8]})",
-                logger=logger,
-                lock=self.locks[_uuid],
-                name=_name,
+            callback=self._callback(
+                callback,
+                executor_name=self.name,
+                job_name=_name,
                 uuid=_uuid,
+                logger=logger,
+                lock=self._locks[_uuid],
+                dispatcher=self._dispatcher,
+                pool=self._pools[_uuid],
             ),
-            error_callback=partial(
-                self._callback,
-                fn=error_callback,
-                msg=f"Error in {self.name} job '{_name}' (UUID={_uuid.hex[:8]})",
-                logger=logger,
-                lock=self.locks[_uuid],
-                name=_name,
+            error_callback=self._callback(
+                error_callback,
+                executor_name=self.name,
+                job_name=_name,
                 uuid=_uuid,
+                logger=logger,
+                lock=self._locks[_uuid],
+                dispatcher=self._dispatcher,
+                pool=self._pools[_uuid],
             ),
         )
         if wait:
@@ -349,13 +363,16 @@ class Executor:
         del uuid, logger  # Unused
         return 143  # SIGTERM
 
-    def terminate(self) -> None:
-        """Terminate all jobs."""
-        with suppress(ExecutorTerminatedError):
-            self.pool.terminate()
-            self.pool.stop_and_join()
-            del _POOLS[self.uuid]
-        self.wait()
+    def terminate(self, uuid: UUID | None = None, wait: bool = True) -> None:
+        """Terminate a specific job or all jobs."""
+        if uuid is None:
+            for _uuid in [*self._pools]:
+                self.terminate(_uuid, wait=False)
+            self.wait()
+        elif uuid in self._pools and uuid in self._locks:
+            self._pools[uuid].terminate()
+            if wait:
+                self.wait(uuid)
 
     def wait(self, uuid: UUID | None = None) -> None:
         """Wait for a specific job or all jobs to complete.
@@ -370,9 +387,11 @@ class Executor:
 
         """
         if uuid is None:
-            for uuid_ in [*self.locks]:
+            for uuid_ in [*self._pools]:
                 self.wait(uuid_)
-        elif uuid in self.locks:
-            self.locks[uuid].acquire()
-            self.locks[uuid].release()
-            del self.locks[uuid]
+        elif uuid in self._pools and uuid in self._locks:
+            self._locks[uuid].acquire()
+            self._locks[uuid].release()
+            self._pools[uuid].stop_and_join()
+            del self._locks[uuid]
+            del self._pools[uuid]

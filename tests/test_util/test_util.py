@@ -3,8 +3,9 @@
 from collections import UserList
 from typing import Any, Callable
 
-from cellophane import data, modules, util
 from pytest import mark, param
+
+from cellophane import data, modules, util
 
 
 class Test_map_nested_keys:
@@ -80,7 +81,9 @@ class Test__instance_or_subclass:
     class _SamplesSub(data.Samples):
         pass
 
-    hook = modules.pre_hook()(lambda: ...)
+    pre_hook = modules.pre_hook()(lambda: ...)
+    post_hook = modules.post_hook()(lambda: ...)
+    exception_hook = modules.exception_hook()(lambda: ...)
     runner = modules.runner()(lambda: ...)
 
     @staticmethod
@@ -91,9 +94,15 @@ class Test__instance_or_subclass:
             (_SamplesSub, data.Samples, True),
             (_SamplesSub, UserList, True),
             (_SamplesSub, list, False),
-            (hook, modules.Hook, True),
-            (hook, Callable, True),
-            (hook, str, False),
+            (pre_hook, modules.PreHook, True),
+            (pre_hook, Callable, True),
+            (pre_hook, str, False),
+            (post_hook, modules.PostHook, True),
+            (post_hook, Callable, True),
+            (post_hook, str, False),
+            (exception_hook, modules.ExceptionHook, True),
+            (exception_hook, Callable, True),
+            (exception_hook, str, False),
             (runner, modules.Runner, True),
             (runner, Callable, True),
             (runner, str, False),

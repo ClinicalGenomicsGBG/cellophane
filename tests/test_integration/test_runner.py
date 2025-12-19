@@ -1,6 +1,7 @@
-from cellophane.testing import BaseTest, Invocation, literal
 from mpire.pool import WorkerPool as WorkerPool
 from pytest import mark
+
+from cellophane.testing import BaseTest, Invocation, literal
 
 
 class Test_runners(BaseTest):
@@ -56,8 +57,8 @@ class Test_runners(BaseTest):
     )
     def test_runner_exception(self, invocation: Invocation) -> None:
         assert invocation.logs == literal(
-            "Unhandled exception: Exception('DUMMY')",
-            "Sample a failed - Unhandled exception in runner 'runner_' Exception('DUMMY')",
+            "Unhandled exception in runner 'runner_': Exception('DUMMY')",
+            "Sample a failed - Unhandled exception in runner 'runner_': Exception('DUMMY')",
         )
 
     @mark.override(
@@ -74,7 +75,7 @@ class Test_runners(BaseTest):
     )
     def test_runner_exit_non_zero(self, invocation: Invocation) -> None:
         assert invocation.logs == literal(
-            "Runner exited with non-zero status(1337)",
+            "Runner 'runner_' exitded with non-zero status(1337)",
             "Sample a failed - Runner 'runner_' exitded with non-zero status(1337)",
         )
 
@@ -119,7 +120,7 @@ class Test_runners(BaseTest):
     )
     def test_results_exception(self, invocation: Invocation) -> None:
         assert invocation.logs == literal(
-            "Exception when merging samples: Exception('DUMMY')"
+            "Unhandled exception when merging samples: Exception('DUMMY')"
         )
 
     @mark.override(

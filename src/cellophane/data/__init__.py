@@ -1,7 +1,7 @@
 """Data classes and functions for cellophane."""
 
 from .container import Container, PreservedDict
-from .exceptions import MergeSamplesTypeError, MergeSamplesUUIDError
+from .exceptions import MergeSamplesError, MergeSamplesTypeError, MergeSamplesUUIDError
 from .merger import Merger
 from .output import Output, OutputGlob
 from .samples import Sample, Samples
@@ -11,6 +11,7 @@ __all__ = [
     "Container",
     "MergeSamplesTypeError",
     "MergeSamplesUUIDError",
+    "MergeSamplesError",
     "Merger",
     "Output",
     "OutputGlob",

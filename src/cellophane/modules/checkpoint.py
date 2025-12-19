@@ -1,5 +1,4 @@
 import json
-import time
 from contextlib import suppress
 from functools import cached_property
 from pathlib import Path

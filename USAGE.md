@@ -9,8 +9,8 @@
 At the very least wou will need an environment with python 3.11+ and pip installed. In this example micromamba is used to create a new environment.
 
 ```shell
-micromamba env create -p my_cellphane_env python=3.11
-micromamba activate my_cellphane_env
+micromamba env create -p my_cellophane_env python=3.11
+micromamba activate my_cellophane_env
 pip install git+https://github.com/ClinicalGenomicsGBG/cellophane.git@latest
 ```
 
@@ -95,7 +95,7 @@ Argument    | Type                    | Description
 ------------|-------------------------|-------------
 `samples`   | `cellophane.Samples`    | Samples to process.
 `config`    | `cellophane.Config`     | Wrapper configuration.
-`timestamp` | `str`                   | A string representation of the current timestamp (YYYYMMDDHHMMSS).
+`timestamp` | `cellophane.Timestamp`  | Pipeline starting time.
 `logger`    | `logging.LoggerAdapter` | A logger that can be used to log messages.
 `root`      | `pathlib.Path`          | A `pathlib.Path` pointing to the root directory of the wrapper repository.
 `workdir`   | `pathlib.Path`          | A `pathlib.Path` pointing to the working directory of the hook.
@@ -127,7 +127,7 @@ Argument      | Type                     | Description
 --------------|--------------------------|-------------
 `samples`     | `cellophane.Samples`     | Samples to process.
 `config`      | `cellophane.Config`      | Wrapper configuration.
-`timestamp`   | `str`                    | A string representation of the current timestamp (YYYYMMDDHHMMSS).
+`timestamp`   | `cellophane.Timestamp`   | Pipeline starting time.
 `logger`      | `logging.LoggerAdapter`  | A logger that can be used to log messages.
 `root`        | `pathlib.Path`           | A `pathlib.Path` pointing to the root directory of the wrapper.
 `workdir`     | `pathlib.Path`           | A `pathlib.Path` pointing to the working directory of the runner.
@@ -153,6 +153,7 @@ Argument      | Type              | Description
 `label`       | `str`             | A label for the pre-hook to use in logs. If not specified, the function name will be used. Note that the hook name (used in `before`/`after`) will always be the same as the function name.
 `before`      | `str\|list[str]` | A name or list of names specifying which pre-hooks this pre-hook will run before. If `before` is set to `"all"`, the pre-hook will run before all other pre-hooks.
 `after`       | `str\|list[str]` | A name or list of names specifying which pre-hooks will run before this pre-hook. If `after` is set to `"all"`, the pre-hook will run after all other pre-hooks.
+
 ---
 
 At runtime, the decorated function (hook) will be called with the following keyword arguments:
@@ -161,7 +162,7 @@ Argument    | Type                    | Description
 ------------|-------------------------|-------------
 `samples`   | `cellophane.Samples`    | Samples to process.
 `config`    | `cellophane.Config`     | Wrapper configuration.
-`timestamp` | `str`                   | A string representation of the current timestamp (YYYYMMDDHHMMSS).
+`timestamp` | `cellophane.Timestamp`  | Pipeline starting time.
 `logger`    | `logging.LoggerAdapter` | A logger that can be used to log messages.
 `root`      | `pathlib.Path`          | A `pathlib.Path` pointing to the root directory of the wrapper repository.
 `workdir`   | `pathlib.Path`          | A `pathlib.Path` pointing to the working directory of the hook.
@@ -297,9 +298,9 @@ Outputs for runners can be specified using the `@cellophane.output` decorator.
 
 Argument      | Type  | Description
 --------------|-------|-------------
-`src`         | `str` | A glob pattern specifying the output files. Paths are relative to workdir. Patterns will be formatted with access to the `sample` and `samples` objects.
-`dst_name`    | `str` | The file name for the output. If not specified, the `src` pattern will be used. Can contain parent directories, and may be used to rename directories if `src` matches a directory.
-`dst_dir`     | `str` | The directory for the output, relative to `config.resultdir`. Files will be placed under this directory using their original names or the `dst_name` if specified.
+`src`         | `str` | A glob pattern specifying the output files. Paths are relative to workdir. Patterns will be formatted with access to the `config`, `workdir`, `sample`, and `samples` objects.
+`dst_name`    | `str` | The file name for the output. If not specified, the `src` pattern will be used. Can contain parent directories, and may be used to rename directories if `src` matches a directory. Patterns will be formatted with access to the `config`, `workdir`, `sample`, and `samples` objects. Additionally, the formatted pattern will be passed to `time.strftime` with the pipeline start time as the reference date.
+`dst_dir`     | `str` | The directory for the output, relative to `config.resultdir`. Files will be placed under this directory using their original names or the `dst_name` if specified. Patterns will be formatted with access to the `config`, `workdir`, `sample`, and `samples` objects. Additionally, the formatted pattern will be passed to `time.strftime` with the pipeline start time as the reference date.
 `checkpoint`  | `str` | The label of the checkpoint that this file belongs to. If not specified, the file will be considered part of the main output. Defaults to `'main'`.
 `òptional`    | `bool`| If `True`, the output will not be considered required. No warning will be issued if the output is missing. Will be excluded when generating the checkpoint hash.
 
@@ -647,25 +648,25 @@ $ python -m my_awesome_wrapper --config_file config.yaml  --bongo bar --help
 
 Usage: my_awesome_wrapper [OPTIONS]
 
-╭─ Options ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│    --log_level          [DEBUG|INFO|WARNING|ERROR|CRITICAL]  Log level (INFO)                                                                     │
-│    --executor_name      [subprocess]                         Name of the executor to use (subprocess)                                             │
-│    --executor_cpus      INTEGER                              Number of CPUs to allocate to jobs started (if supported by the executor) (1)        │
-│    --executor_memory    SIZE                                 Ammount of memory to allocate to jobs started (if supported by the executor) (2 GB)  │
-│    --config_file        PATH                                 Path to config file                                                                  │
-│    --logdir             PATH                                 Log directory (out/logs)                                                             │
-│    --workdir            PATH                                 Working directory where intermediate files are stored (out)                          │
-│    --resultdir          PATH                                 Results base directory where output files are copied (out/results)                   │
-│    --tag                TEXT                                 Tag identifying the pipeline run (defaults to a timestamp - YYMMDDHHMMSS) (DUMMY)    │
-│    --samples_file       PATH                                 Path YAML file with samples - eg. [{id: ID, files: [F1, F2]}, ...] (samples.yaml)    │
-│ *  --bingo_bango        TEXT                                 Some string (REQUIRED)                                                               │
-│    --bongo              [foo|bar]                            A string with a limited set of allowed values (bar)                                  │
-│    --foo                ARRAY                                A list of integers ([13, 37])                                                        │
-│    --bar                MAPPING                              A mapping                                                                            │
-│    --baz/--no_baz                                            A boolean (baz)                                                                      │
-│    --max_file_size      SIZE                                 The maximum file size in bytes (8)                                                   │
-│    --help                                                    Show this message and exit.                                                          │
-╰───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│    --log_level          [DEBUG|INFO|WARNING|ERROR|CRITICAL]  Log level (INFO)                                                                           │
+│    --executor_name      [subprocess]                         Name of the executor to use (subprocess)                                                   │
+│    --executor_cpus      INTEGER                              Number of CPUs to allocate to jobs started (if supported by the executor) (1)              │
+│    --executor_memory    SIZE                                 Ammount of memory to allocate to jobs started (if supported by the executor) (2 GB)        │
+│    --config_file        PATH                                 Path to config file                                                                        │
+│    --logdir             PATH                                 Log directory (out/logs)                                                                   │
+│    --workdir            PATH                                 Working directory where intermediate files are stored (out)                                │
+│    --resultdir          PATH                                 Results base directory where output files are copied (out/results)                         │
+│    --tag                TEXT                                 Tag identifying the pipeline run (defaults to the starting time - YYYYMMDD-HHMMSS) (DUMMY) │
+│    --samples_file       PATH                                 Path YAML file with samples - eg. [{id: ID, files: [F1, F2]}, ...] (samples.yaml)          │
+│ *  --bingo_bango        TEXT                                 Some string (REQUIRED)                                                                     │
+│    --bongo              [foo|bar]                            A string with a limited set of allowed values (bar)                                        │
+│    --foo                ARRAY                                A list of integers ([13, 37])                                                              │
+│    --bar                MAPPING                              A mapping                                                                                  │
+│    --baz/--no_baz                                            A boolean (baz)                                                                            │
+│    --max_file_size      SIZE                                 The maximum file size in bytes (8)                                                         │
+│    --help                                                    Show this message and exit.                                                                │
+╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
 
 ```
 

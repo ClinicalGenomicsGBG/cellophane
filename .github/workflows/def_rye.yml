@@ -1,0 +1,61 @@
+---
+name: Synchronize Rye
+
+permissions:
+  contents: write
+
+on: # yamllint disable-line rule:truthy
+  workflow_call:
+    inputs:
+      head:
+        description: The branch to operate on
+        type: string
+        required: true
+      version:
+        description: The version to bump to
+        type: string
+        required: true
+
+jobs:
+  rye:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache/restore@v4
+        id: cache
+        with:
+          key: ${{ hashFiles('pyproject.toml') }}-${{ hashFiles('requirements.lock') }}-${{ hashFiles('requirements-dev.lock') }}-${{ inputs.version }}
+          path: |
+            pyproject.toml
+            requirements.lock
+            requirements-dev.lock
+      - uses: eifinger/setup-rye@v4
+        with:
+          enable-cache: true
+        if: steps.cache.outputs.cache-hit != 'true'
+      - name: rye-lock
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: rye lock
+      - name: version
+        id: rye-version
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: echo "msg=$(rye version -- ${{ inputs.version }})" >> "$GITHUB_OUTPUT"
+      - name: git-commit
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          git config --global user.email ""
+          git config --global user.name "github-actions[bot]"
+          git diff --exit-code || {
+            git commit -am "chore[bump]: ${{ steps.rye-version.outputs.msg }}"
+            git push
+          }
+      - uses: actions/cache/save@v4
+        if: steps.cache.outputs.cache-hit != 'true'
+        with:
+          key: ${{ hashFiles('pyproject.toml') }}-${{ hashFiles('requirements.lock') }}-${{ hashFiles('requirements-dev.lock') }}-${{ inputs.version }}
+          path: |
+            pyproject.toml
+            requirements.lock
+            requirements-dev.lock

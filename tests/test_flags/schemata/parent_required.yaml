@@ -1,0 +1,29 @@
+schema:
+  required: [a]
+  properties:
+    a:
+      type: object
+      required: [x]
+      properties:
+        x: {type: null}
+        y: {type: null}
+    b:
+      type: object
+      required: [x]
+      properties:
+        x: {type: null}
+        y: {type: null}
+
+expected:
+  - config: {}
+    flags:
+    - {key: [a, x], required: true}
+    - {key: [a, y], required: false}
+    - {key: [b, x], required: false}
+    - {key: [b, y], required: false}
+  - config: {b: {y: "foo"}}
+    flags:
+    - {key: [a, x], required: true}
+    - {key: [a, y], required: false}
+    - {key: [b, x], required: true}
+    - {key: [b, y], value: "foo"}

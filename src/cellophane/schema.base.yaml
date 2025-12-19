@@ -1,0 +1,75 @@
+required:
+  - workdir
+  - resultdir
+  - logdir
+
+
+properties:
+  log:
+    type: object
+    properties:
+      level:
+        default: INFO
+        description: Log level (NOTSET will log all messages, including those from external libraries)
+        enum:
+          - NOTSET
+          - DEBUG
+          - INFO
+          - WARNING
+          - ERROR
+          - CRITICAL
+        type: string
+      external:
+        default: false
+        description: Log messages from external libraries
+        type: boolean
+      clean:
+        default: true
+        description: Remove main log file after successful pipeline run
+        type: boolean
+
+  executor:
+    type: object
+    properties:
+      name:
+        type: string
+        description: Name of the executor to use
+        default: subprocess
+      cpus:
+        type: integer
+        description: Number of CPUs to allocate to jobs started (if supported by the executor)
+        default: 1
+      memory:
+        type: size
+        description: Ammount of memory to allocate to jobs started (if supported by the executor)
+        default: 2 GB
+
+  config_file:
+    description: Path to config file
+    type: path
+
+  logdir:
+    description: Log directory
+    type: path
+
+  workdir:
+    description: Working directory where intermediate files are stored
+    type: path
+
+  resultdir:
+    description: Results base directory where output files are copied
+    type: path
+
+  tag:
+    description: Tag identifying the pipeline run (defaults to a timestamp - YYMMDDHHMMSS)
+    type: string
+
+  samples_file:
+    description: "Path YAML file with samples - eg [{id: ID, files: [F1, F2]}, ...]"
+    type: path
+
+  clean:
+    description: Clean intermediate files after pipeline run
+    type: boolean
+    default: true
+

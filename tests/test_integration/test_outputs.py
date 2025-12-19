@@ -1,0 +1,123 @@
+from time import gmtime
+
+from cellophane.testing import BaseTest, Invocation, literal, regex
+
+
+class Test_outputs(BaseTest):
+    args = [
+        "--samples_file samples.yaml",
+        "--workdir out",
+        "--tag DUMMY",
+    ]
+    structure = {
+        "modules/a.py": """
+            from cellophane import runner, post_hook, output, data
+            from shutil import copyfile, copytree
+
+            @post_hook()
+            def o(samples, logger, config, **_):
+                logger.info(f"Copying {len(samples.output)} outputs")
+                for o in samples.output:
+                    if not o.dst.is_relative_to(config.resultdir):
+                        logger.error(f"{o.dst} is not relative to {config.resultdir}")
+                    elif not o.src.exists():
+                        logger.error(f"{o.src} does not exist")
+                    elif o.dst.exists():
+                        logger.error(f"{o.dst} already exists")
+                    elif o.src.is_file():
+                        logger.info(f"Copying {o.src} to {o.dst}")
+                        o.dst.parent.mkdir(parents=True, exist_ok=True)
+                        copyfile(o.src, o.dst)
+                    elif o.src.is_dir():
+                        logger.info(f"Copying directory {o.src} to {o.dst}")
+                        o.dst.parent.mkdir(parents=True, exist_ok=True)
+                        copytree(o.src, o.dst)
+                    else:
+                        logger.error(f"Unknown output type {o}")
+
+
+            @runner()
+            @output("single.txt")
+            @output("sample_{sample.id}.txt")
+            @output("missing.txt")
+            @output("glob/*.txt", dst_name="invalid_rename.txt")
+            @output("single.txt", dst_name="rename.txt")
+            @output("glob/*.txt", dst_dir="timestamp_fmt_dir_{timestamp[%H%M%S]}")
+            @output("single.txt", dst_name="timestamp_fmt_name_{timestamp[%H%M%S]}.txt")
+            @output("glob/*.txt", dst_dir="timestamp_dir_{timestamp}")
+            @output("single.txt", dst_name="timestamp_name_{timestamp}.txt")
+            @output("overwrite_a.txt", dst_name="overwrite.txt")
+            @output("overwrite_b.txt", dst_name="overwrite.txt")
+            @output("nested/**/*.txt")
+            @output("nested", dst_dir="directory")
+            def runner_a(samples, workdir, config, **_):
+                for sample in samples:
+                    (workdir / f"sample_{sample.id}.txt").touch()
+                (workdir / "glob").mkdir()
+                (workdir / "glob" / "a.txt").write_text("GLOB_A")
+                (workdir / "glob" / "b.txt").write_text("GLOB_B")
+                (workdir / "nested" / "a").mkdir(parents=True)
+                (workdir / "nested" / "a" / "x.txt").touch()
+                (workdir / "nested" / "a" / "y.txt").touch()
+                (workdir / "nested" / "b").mkdir(parents=True)
+                (workdir / "nested" / "b" / "z.txt").touch()
+                (workdir / "single.txt").write_text("SINGLE")
+                (workdir / "absolute.txt").write_text("ABSOLUTE")
+                (workdir / "relative.txt").write_text("RELATIVE")
+                (workdir / "overwrite_a.txt").write_text("OVERWRITE")
+                (workdir / "overwrite_b.txt").write_text("OVERWRITE")
+
+                samples.output |= {
+                    data.Output(src="I_DO_NOT_EXIST", dst="I_AM_NOT_RELATIVE"),
+                    data.Output(src="I_DO_NOT_EXIST", dst=config.resultdir / "somepath"),
+                    data.OutputGlob(src=(workdir / "absolute.txt").absolute()),
+                    data.OutputGlob(src=(workdir / "relative.txt")),
+                    data.OutputGlob(src=(workdir / "single.txt"), dst_dir=config.resultdir.absolute()),
+                }
+
+                return samples
+        """,
+        "samples.yaml": """
+            - id: a
+              files:
+              - input/a.txt
+            - id: b
+              files:
+              - input/b.txt
+        """,
+        "input/a.txt": "INPUT_A",
+        "input/b.txt": "INPUT_B",
+    }
+    mocks = {"cellophane.util.timestamp.localtime": {"new": lambda *_: gmtime(1092587022.0)}}
+
+    def test_outputs(self, invocation: Invocation) -> None:
+        assert invocation.logs == literal(
+            "Copying 23 outputs",
+            "Copying out/DUMMY/runner_a/single.txt to out/results/single.txt",
+            "Copying out/DUMMY/runner_a/sample_a.txt to out/results/sample_a.txt",
+            "Copying out/DUMMY/runner_a/sample_b.txt to out/results/sample_b.txt",
+            "No files matched pattern 'out/DUMMY/runner_a/missing.txt'",
+            "Copying out/DUMMY/runner_a/glob/a.txt to out/results/a.txt",
+            "Copying out/DUMMY/runner_a/glob/b.txt to out/results/b.txt",
+            "Copying out/DUMMY/runner_a/single.txt to out/results/rename.txt",
+            "Copying out/DUMMY/runner_a/glob/a.txt to out/results/timestamp_dir_040815-162342/a.txt",
+            "Copying out/DUMMY/runner_a/glob/b.txt to out/results/timestamp_dir_040815-162342/b.txt",
+            "Copying out/DUMMY/runner_a/glob/a.txt to out/results/timestamp_fmt_dir_162342/a.txt",
+            "Copying out/DUMMY/runner_a/glob/b.txt to out/results/timestamp_fmt_dir_162342/b.txt",
+            "Copying out/DUMMY/runner_a/single.txt to out/results/timestamp_name_040815-162342.txt",
+            "Copying out/DUMMY/runner_a/single.txt to out/results/timestamp_fmt_name_162342.txt",
+            "to out/results/overwrite.txt",
+            "out/results/overwrite.txt already exists",
+            "Copying out/DUMMY/runner_a/nested/a/x.txt to out/results/x.txt",
+            "Copying out/DUMMY/runner_a/nested/a/y.txt to out/results/y.txt",
+            "Copying out/DUMMY/runner_a/nested/b/z.txt to out/results/z.txt",
+            "Copying directory out/DUMMY/runner_a/nested to out/results/directory/nested",
+            "Copying out/DUMMY/runner_a/relative.txt to out/results/relative.txt",
+            "I_AM_NOT_RELATIVE is not relative to out/results",
+            "I_DO_NOT_EXIST does not exist",
+        )
+        assert invocation.logs == regex(
+            r"Copying .*/out/DUMMY/runner_a/absolute\.txt to out/results/absolute\.txt",
+            r".*/out/results/single\.txt is not relative to out/results",
+        )
+        assert invocation.exit_code == 0

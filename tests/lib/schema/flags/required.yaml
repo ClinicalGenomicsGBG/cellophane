@@ -1,9 +1,0 @@
-schema:
-  properties:
-    a:
-      type: null
-  required: [a]
-
-flags:
-  - key: !!python/tuple ["a"]
-    required: true

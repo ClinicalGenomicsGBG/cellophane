@@ -607,7 +607,7 @@ class Test_hooks(BaseTest):
 
                 @pre_hook(after=["all", "b"])
                 def after_all_b(samples, logger, **_):
-                    assert "db" in samples.executed, hook_info(samples, msg="Expected 'b' to be executed")
+                    assert "b" in samples.executed, hook_info(samples, msg="Expected 'b' to be executed")
                     samples.executed.add("after_all_b")
 
                 @pre_hook(after="all")
@@ -631,6 +631,94 @@ class Test_hooks(BaseTest):
             "Running after_all_b hook",
             "Running b hook",
         )
+
+    @mark.override(
+        structure={
+            "modules/a.py": """
+                from cellophane import pre_hook, Samples
+
+                class TestSamples(Samples):
+                    executed = set()
+
+                    @property
+                    def not_executed(self):
+                        return {
+                            "a",
+                            "b",
+                            "c",
+                            "d",
+                        } - self.executed
+
+                def hook_info(samples, hook_name):
+                    return f"{hook_name} :: Executed [{', '.join(sorted(samples.executed))}] :: Not executed: [{', '.join(sorted(samples.not_executed))}]"
+
+                @pre_hook(before=["b", "c"])
+                def a(samples, logger, **_):
+                    samples.executed.add("a")
+                    return samples
+
+                @pre_hook(after="a")
+                def b(samples, logger, **_):
+                    samples.executed.add("b")
+                    return samples
+
+                @pre_hook(before="d")
+                def c(samples, logger, **_):
+                    samples.executed.add("c")
+                    return samples
+
+                @pre_hook(after=["b", "c"])
+                def d(samples, logger, **_):
+                    samples.executed.add("d")
+                    return samples
+
+                @pre_hook(after=["a"])
+                def after_a(samples, logger, **_):
+                    logger.critical(hook_info(samples, "after_a"))
+
+                @pre_hook(after=["a", "b"])
+                def after_ab(samples, logger, **_):
+                    logger.critical(hook_info(samples, "after_ab"))
+                @pre_hook(after=["a", "b", "c"])
+                def after_abc(samples, logger, **_):
+                    logger.critical(hook_info(samples, "after_abc"))
+
+            """,
+            "samples.yaml": """
+                - id: sample1
+                  files:
+                  - input/sample1.txt
+            """,
+            "input/sample1.txt": "SAMPLE1",
+        },
+        args=[*args, "--samples_file samples.yaml"],
+    )
+    def test_extra_hook_deps(self, invocation: Invocation) -> None:
+        assert invocation.logs == literal(
+            "after_a :: Executed [a] :: Not executed: [b, c, d]",
+            "after_ab :: Executed [a, b] :: Not executed: [c, d]",
+            "after_abc :: Executed [a, b, c] :: Not executed: [d]",
+        )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     @mark.override(
         structure={

@@ -274,6 +274,65 @@ class ExceptionHook(_BaseHook):
         )
 
 
+def _get_hook_by_name(name: str, hooks: list[PreHook | PostHook | ExceptionHook]) -> _BaseHook | None:
+    """Get a hook by its name from a list of hooks.
+
+    Args:
+    ----
+        name (str): The name of the hook to get.
+        hooks (list[_BaseHook]): The list of hooks to search.
+
+    Returns:
+    -------
+        _BaseHook | None: The hook with the given name, or None if not found.
+    """
+    try:
+        return next(hook for hook in hooks if hook.__name__ == name)
+    except StopIteration:
+        return None
+
+
+def _expand_dependencies(
+    hooks: list[PreHook | PostHook | ExceptionHook],
+) -> tuple[dict[str, DEPENDENCY_TYPE], dict[str, DEPENDENCY_TYPE]]:
+    """Expands hook dependencies to ensure hooks execute as closely as possible
+    to their specified dependencies.
+
+    This should more closely align with user expectations when specifying hook
+    dependencies (e.g. If hook A specifies it should run before hook B, and hook B
+    specifies it should run before hook C, then hook A should also run before hook C).
+
+    Args:
+    ----
+        hooks (list[Hook]): The list of hooks to expand dependencies for.
+    Returns:
+    -------
+        dict[str, tuple[DEPENDENCY_TYPE, DEPENDENCY_TYPE]]: A dictionary mapping
+            hook names to their expanded (before, after) dependencies.
+
+    """
+    _before = {}
+    _after = {}
+    for hook in hooks:
+        extra_before = {
+            b
+            for d in hook.after
+            if isinstance(d, str) and (dependency := _get_hook_by_name(d, hooks)) is not None
+            for b in dependency.before
+        }
+        extra_after = {
+            a
+            for d in hook.before
+            if isinstance(d, str) and (dependency := _get_hook_by_name(d, hooks)) is not None
+            for a in dependency.after
+        }
+
+        _before[hook.__name__] = [*{*hook.before} | {*extra_before} - {*hook.after, *extra_after, hook.__name__}]
+        _after[hook.__name__] = [*{*hook.after} | {*extra_after} - {*hook.before, *extra_before, hook.__name__}]
+
+    return _before, _after
+
+
 def resolve_dependencies(
     hooks: list[PreHook | PostHook | ExceptionHook],
 ) -> list[PreHook | PostHook | ExceptionHook]:
@@ -292,13 +351,14 @@ def resolve_dependencies(
         list[Hook]: The hooks in the resolved order.
 
     """
+    _before, _after = _expand_dependencies(hooks)
     deps = {
         name: {
-            *[d for h in hooks if h.__name__ == name for d in h.after],
-            *[h.__name__ for h in hooks if name in h.before],
+            *[d for h in hooks if h.__name__ == name for d in _after[h.__name__]],
+            *[h.__name__ for h in hooks if name in _before[h.__name__]],
         }
         for name in {
-            *[n for h in hooks for n in h.before + h.after],
+            *[n for h in hooks for n in _before[h.__name__] + _after[h.__name__]],
             *[h.__name__ for h in hooks],
         }
     }

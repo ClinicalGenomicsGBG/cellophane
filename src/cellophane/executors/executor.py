@@ -149,7 +149,11 @@ class Executor:
         stdout_path = workdir_ / f"{name}.{uuid.hex}.{self.name}.stdout"
         stderr_path = workdir_ / f"{name}.{uuid.hex}.{self.name}.stderr"
 
-        env_ = env or {}
+        env_ = config.executor.env | (env or {})
+        path_ = "/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin"
+        env_["PATH"] = f"{env_['PATH']}:{path_}" if "PATH" in env_ else path_
+        os_env_ = os_env if os_env is not None else config.executor.os_env
+
         args_ = tuple(word for arg in args for word in shlex.split(str(arg)))
         if conda_spec:
             yaml = YAML(typ="safe")
@@ -173,7 +177,7 @@ class Executor:
                 "uuid": uuid,
                 "workdir": workdir_,
                 "env": {k: str(v) for k, v in env_.items()},
-                "os_env": os_env,
+                "os_env": os_env_,
                 "cpus": cpus or config.executor.cpus,
                 "memory": memory or config.executor.memory,
                 "config": config,
@@ -262,7 +266,7 @@ class Executor:
         uuid: UUID | None = None,
         workdir: Path | None = None,
         env: dict | None = None,
-        os_env: bool = True,
+        os_env: bool | None  = None,
         callback: Callable | None = None,
         error_callback: Callable | None = None,
         cpus: int | None = None,

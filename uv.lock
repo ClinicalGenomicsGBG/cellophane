@@ -13,7 +13,7 @@ wheels = [
 
 [[package]]
 name = "cellophane"
-version = "1.2.0"
+version = "1.2.1.dev0"
 source = { editable = "." }
 dependencies = [
     { name = "attrs" },
@@ -25,6 +25,7 @@ dependencies = [
     { name = "mpire", extra = ["dill"] },
     { name = "packaging" },
     { name = "psutil" },
+    { name = "py-rattler" },
     { name = "pytest-profiling" },
     { name = "questionary" },
     { name = "rich-click" },
@@ -60,6 +61,7 @@ requires-dist = [
     { name = "mpire", extras = ["dill"], specifier = ">=2.10.2" },
     { name = "packaging", specifier = ">=24.0,<25.0" },
     { name = "psutil", specifier = ">=5.9.4,<6.0.0" },
+    { name = "py-rattler", specifier = ">=0.22.0" },
     { name = "pytest-profiling", specifier = ">=1.7.0,<2.0.0" },
     { name = "questionary", specifier = ">=2.0.1,<3.0.0" },
     { name = "rich-click", specifier = ">=1.8.9,<2.0.0" },
@@ -428,6 +430,28 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/6e/f5/2aa3a4acdc1e5940b59d421742356f133185667dd190b166dbcfcf5d7b43/psutil-5.9.8-cp37-abi3-win32.whl", hash = "sha256:bc56c2a1b0d15aa3eaa5a60c9f3f8e3e565303b465dbf57a1b730e7a2b9844e0", size = 251252 },
     { url = "https://files.pythonhosted.org/packages/93/52/3e39d26feae7df0aa0fd510b14012c3678b36ed068f7d78b8d8784d61f0e/psutil-5.9.8-cp37-abi3-win_amd64.whl", hash = "sha256:8db4c1b57507eef143a15a6884ca10f7c73876cdf5d51e713151c1236a0e68cf", size = 255090 },
     { url = "https://files.pythonhosted.org/packages/05/33/2d74d588408caedd065c2497bdb5ef83ce6082db01289a1e1147f6639802/psutil-5.9.8-cp38-abi3-macosx_11_0_arm64.whl", hash = "sha256:d16bbddf0693323b8c6123dd804100241da461e41d6e332fb0ba6058f630f8c8", size = 249898 },
+]
+
+[[package]]
+name = "py-rattler"
+version = "0.23.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/9c/74/ef51ab3c63b33747436192da9d1f312a6d38cc981e01a8f9c76bb412ffeb/py_rattler-0.23.2.tar.gz", hash = "sha256:0b6eaf428054ad6c5357c27d8b017843019bca27a4dbd308c541c467d6525523", size = 2369230 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3a/39/e6e984b7ca34a2e30f1a984bd40cb1ef561a705bc1b36b9e960c975234f3/py_rattler-0.23.2-cp38-abi3-macosx_10_12_x86_64.macosx_11_0_arm64.macosx_10_12_universal2.whl", hash = "sha256:87be072cae015d9323dbb2eee3adcb0fef85db6a96b3a0dfd4e2e71603544636", size = 34392163 },
+    { url = "https://files.pythonhosted.org/packages/57/a9/4fbf9856840f0bb4d0ebaccbb8b217ff63265f219a68a38f7bb8bf987e0f/py_rattler-0.23.2-cp38-abi3-macosx_10_12_x86_64.whl", hash = "sha256:4cd015c5122e29111ece5a402e9b38f12dfa78ede3c00e979e3f1b05816dbe5a", size = 17851777 },
+    { url = "https://files.pythonhosted.org/packages/63/a6/e05b7e98dbb61552d9a7b9520896900b0d1a80af1fd463e04bbaa63992d6/py_rattler-0.23.2-cp38-abi3-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:267419b30ec460bde0ed760a9a8b237b694736379cf508974d47c4976a83ae05", size = 21408638 },
+    { url = "https://files.pythonhosted.org/packages/dc/d7/d842dd0374a4bf9aa71fdf061f00eb6cce01ab29a683e8a0d53032cbf09b/py_rattler-0.23.2-cp38-abi3-manylinux_2_17_ppc64.manylinux2014_ppc64.whl", hash = "sha256:0363c602d36dcef5315742e8798ff13a962a4b40ee605f16e6ca70f3bca9b06d", size = 28151423 },
+    { url = "https://files.pythonhosted.org/packages/aa/b3/e38fc548f9fc0f9857ec20a31152d05cc23e07a82487f0e0f955321560d9/py_rattler-0.23.2-cp38-abi3-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:a722545ce466e6c68288ebd28567c7d7736756a7e9eb18c55bf17eea433fed9f", size = 26994536 },
+    { url = "https://files.pythonhosted.org/packages/5a/86/6e0202ddd5ffc1c9cb1be80c9981a67061413e05ab6073939fa9c9dc0821/py_rattler-0.23.2-cp38-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:a502192d3f3c13a6c332e1d790e85c49bd8cbdf814c6d312841586b5b5988acb", size = 20079608 },
+    { url = "https://files.pythonhosted.org/packages/4a/84/a39988634d76f1530dca79d96bf6e81e783444af19791ac29c2c47ba51b1/py_rattler-0.23.2-cp38-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:77e72d2f9168cf493d1420dbd51dc3b8cce0a8ea690e6e5cbb809e67657059a4", size = 20151862 },
+    { url = "https://files.pythonhosted.org/packages/d8/f1/ecf034c9c9ee2f449849a69cd6f73f8f88a160fff4ca263c0634a2768bcf/py_rattler-0.23.2-cp38-abi3-manylinux_2_28_armv7l.whl", hash = "sha256:b4709d39f2b1bacb0742f3a8c314ebc15f1399ae2fc4408d0eaff895895f7f14", size = 19254628 },
+    { url = "https://files.pythonhosted.org/packages/58/a2/b7e28547e6f8e693d87a8b7aa3877e196f0fa6e52812851a2e3542c51384/py_rattler-0.23.2-cp38-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:f9c2a9fb0e08d888916c0f66a17c8a8727352235061f8b852252530c993c818f", size = 20349278 },
+    { url = "https://files.pythonhosted.org/packages/a9/fc/59177162308ea9df743fe12370404bfec085db9c863a97739842fb511bc5/py_rattler-0.23.2-cp38-abi3-musllinux_1_2_armv7l.whl", hash = "sha256:f8dc384841df27f20a345f8ab529f6d861bd7d87ee481e0538d70f34c26943e3", size = 19379558 },
+    { url = "https://files.pythonhosted.org/packages/85/68/a3fe744827d03d0a8e29c02ffc7ccfd1c5d00b0e55b20dd97020f59e1760/py_rattler-0.23.2-cp38-abi3-musllinux_1_2_i686.whl", hash = "sha256:61b3929eb15a5a7fe5d3a785be1a890fd92570619507cf54e8d536d4a262a943", size = 22746213 },
+    { url = "https://files.pythonhosted.org/packages/a3/8c/5fb4d20dcd55fd5d6eb7d16d800030d10bb12446eb285b6c6cf0071a975e/py_rattler-0.23.2-cp38-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:7cb9979c1c5dd05793ea672858fe989c309bcb405b6e4d358b4a5a8a8d8de4ec", size = 20796660 },
+    { url = "https://files.pythonhosted.org/packages/7e/e4/204e9206c6ba9cbc2f656e040c685bcd7a8eeb9dfd3dadf6ad484c0f2e39/py_rattler-0.23.2-cp38-abi3-win32.whl", hash = "sha256:349ff4313739bb988bb88e080b67e6ca84104f2cf988343de87604c70f69bbc9", size = 13582057 },
+    { url = "https://files.pythonhosted.org/packages/4c/e1/011b49f954b3bcc773f81d73f4ee873d21d8e394366df316e66e857fedfe/py_rattler-0.23.2-cp38-abi3-win_amd64.whl", hash = "sha256:dcf730a9af43aba38bad0c047e39e669fd120d41faa247e455aafa4e3ef6623c", size = 15235927 },
 ]
 
 [[package]]

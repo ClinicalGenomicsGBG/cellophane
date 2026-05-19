@@ -43,15 +43,19 @@ jobs:
       - name: version
         id: rye-version
         if: steps.cache.outputs.cache-hit != 'true'
-        run: echo "msg=$(rye version -- ${{ inputs.version }})" >> "$GITHUB_OUTPUT"
+        env:
+          INPUTS_VERSION: ${{ inputs.version }}
+        run: echo "version=$(rye version -- ${INPUTS_VERSION})" >> "$GITHUB_OUTPUT"
       - name: git-commit
         if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          RYE_VERSION_MSG: ${{ steps.rye-version.outputs.version }}
         run: |
           git config --global user.email ""
           git config --global user.name "github-actions[bot]"
           git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
           git diff --exit-code || {
-            git commit -am "chore[bump]: ${{ steps.rye-version.outputs.msg }}"
+            git commit -am "chore[bump]: ${RYE_VERSION_MSG}"
             git push
           }
       - uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5

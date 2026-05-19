@@ -28,11 +28,12 @@ jobs:
       - name: move-pr
         env:
           GH_TOKEN: ${{ github.token }}
-          comment: |
+          INPUTS_BASE: ${{ inputs.base }}
+          COMMENT: |
             # 🤖 \*bleep bloop\*
 
             This PR will be moved to the ${{ inputs.base }} branch.
 
         run: |
-          gh pr comment ${{ inputs.pr-number }} --body "$comment"
-          gh pr edit ${{ inputs.pr-number }} --base ${{ inputs.base }}
+          gh pr comment ${{ inputs.pr-number }} --body "${COMMENT}"
+          gh pr edit ${{ inputs.pr-number }} --base "${INPUTS_BASE}"

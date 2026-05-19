@@ -2,7 +2,7 @@
 ---
 name: Push to dev
 
-permissions: read-all
+permissions: {}
 
 on: # yamllint disable-line rule:truthy
   push:

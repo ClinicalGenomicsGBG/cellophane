@@ -607,7 +607,7 @@ class Test_hooks(BaseTest):
 
                 @pre_hook(after=["all", "b"])
                 def after_all_b(samples, logger, **_):
-                    assert "db" in samples.executed, hook_info(samples, msg="Expected 'b' to be executed")
+                    assert "b" in samples.executed, hook_info(samples, msg="Expected 'b' to be executed")
                     samples.executed.add("after_all_b")
 
                 @pre_hook(after="all")
@@ -630,6 +630,120 @@ class Test_hooks(BaseTest):
             "Running after_all_before_b hook",
             "Running after_all_b hook",
             "Running b hook",
+        )
+
+    @mark.override(
+        structure={
+            "modules/a.py": """
+                from cellophane import pre_hook, Samples
+
+                class TestSamples(Samples):
+                    executed = set()
+
+                    @property
+                    def not_executed(self):
+                        return {
+                            "a",
+                            "b",
+                            "c",
+                            "d",
+                        } - self.executed
+
+                def hook_info(samples, hook_name):
+                    return f"{hook_name} :: Executed [{', '.join(sorted(samples.executed))}] :: Not executed: [{', '.join(sorted(samples.not_executed))}]"
+
+                @pre_hook(before=["b", "c"])
+                def a(samples, logger, **_):
+                    samples.executed.add("a")
+                    return samples
+
+                @pre_hook(after="a")
+                def b(samples, logger, **_):
+                    samples.executed.add("b")
+                    return samples
+
+                @pre_hook(before="d")
+                def c(samples, logger, **_):
+                    samples.executed.add("c")
+                    return samples
+
+                @pre_hook(after=["b", "c"])
+                def d(samples, logger, **_):
+                    samples.executed.add("d")
+                    return samples
+
+                @pre_hook(after=["a"])
+                def after_a(samples, logger, **_):
+                    logger.critical(hook_info(samples, "after_a"))
+
+                @pre_hook(after=["b"])
+                def after_b(samples, logger, **_):
+                    logger.critical(hook_info(samples, "after_b"))
+
+                @pre_hook(after=["a", "b"])
+                def after_ab(samples, logger, **_):
+                    logger.critical(hook_info(samples, "after_ab"))
+
+                @pre_hook(after=["c"])
+                def after_c(samples, logger, **_):
+                    logger.critical(hook_info(samples, "after_c"))
+
+                @pre_hook(after=["a", "b", "c"])
+                def after_abc(samples, logger, **_):
+                    logger.critical(hook_info(samples, "after_abc"))
+
+                @pre_hook(before=["a"])
+                def before_a(samples, logger, **_):
+                    logger.critical(hook_info(samples, "before_a"))
+
+                @pre_hook(before=["b"])
+                def before_b(samples, logger, **_):
+                    logger.critical(hook_info(samples, "before_b"))
+
+                @pre_hook(before=["a", "b"])
+                def before_ab(samples, logger, **_):
+                    logger.critical(hook_info(samples, "before_ab"))
+
+                @pre_hook(before=["c"])
+                def before_c(samples, logger, **_):
+                    logger.critical(hook_info(samples, "before_c"))
+
+                @pre_hook(before=["b", "c", "d"])
+                def before_bcd(samples, logger, **_):
+                    logger.critical(hook_info(samples, "before_bcd"))
+
+
+                @pre_hook(after=["b"], before=["c"])
+                def after_b_before_c(samples, logger, **_):
+                    logger.critical(hook_info(samples, "after_b_before_c"))
+
+                @pre_hook(before=["b", "after_b_before_c"])
+                def should_avoid_circular_deps(samples, logger, **_):
+                    logger.critical(hook_info(samples, "should_avoid_circular_deps"))
+            """,
+            "samples.yaml": """
+                - id: sample1
+                  files:
+                  - input/sample1.txt
+            """,
+            "input/sample1.txt": "SAMPLE1",
+        },
+        args=[*args, "--samples_file samples.yaml"],
+    )
+    def test_extra_hook_deps(self, invocation: Invocation) -> None:
+        assert invocation.logs == literal(
+            "before_a :: Executed [] :: Not executed: [a, b, c, d]",
+            "before_ab :: Executed [] :: Not executed: [a, b, c, d]",
+            "after_a :: Executed [a] :: Not executed: [b, c, d]",
+            "before_b :: Executed [a] :: Not executed: [b, c, d]",
+            "after_ab :: Executed [a, b] :: Not executed: [c, d]",
+            "before_bcd :: Executed [a] :: Not executed: [b, c, d]",
+            "after_b :: Executed [a, b] :: Not executed: [c, d]",
+            "before_c :: Executed [a, b] :: Not executed: [c, d]",
+            "after_c :: Executed [a, b, c] :: Not executed: [d]",
+            "after_abc :: Executed [a, b, c] :: Not executed: [d]",
+            "after_b_before_c :: Executed [a, b] :: Not executed: [c, d]",
+            "should_avoid_circular_deps :: Executed [a] :: Not executed: [b, c, d]",
         )
 
     @mark.override(

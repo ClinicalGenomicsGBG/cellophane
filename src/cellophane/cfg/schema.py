@@ -4,6 +4,7 @@ from __future__ import annotations
 from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Sequence
+from click.parser import UNSET
 
 from ruamel.yaml import YAML, CommentedMap, CommentToken
 from ruamel.yaml.error import CommentMark
@@ -95,6 +96,9 @@ class Schema(Container):
                 else:
                     # Otherwise, use " to preserve whitespace
                     _default = DoubleQuotedScalarString(flag.default)
+            elif flag.default == UNSET:
+                # If the default is UNSET, use ~ to represent null
+                _default = None
             else:
                 # For all other types, use the default string representation
                 _default = flag.default

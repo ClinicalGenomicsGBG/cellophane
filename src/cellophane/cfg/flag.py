@@ -9,6 +9,7 @@ import rich_click as click
 from attrs import define, field, setters
 
 from .click_ import FORMATS, SCHEMA_TYPES, InvertibleParamType, click_type
+from click.parser import UNSET
 
 if TYPE_CHECKING:
     from typing import Any, Callable, Iterable, SupportsFloat, Type
@@ -67,7 +68,7 @@ class Flag:
     format: FORMATS | None = field(default=None)
     pattern: str | None = field(default=None)
     description: str | None = field(default=None)
-    default: Any = field(default=None)
+    default: Any = field(default=UNSET)
     value: Any = field(default=None)
     enum: list | None = field(default=None)
     required: bool = field(default=False)
@@ -184,11 +185,11 @@ class Flag:
             (f"--{self.flag}/--{self.no_flag}" if self.type == "boolean" else f"--{self.flag}"),
             self.flag,
             type=type_,
-            default=True if self.type == "boolean" and default is None else default,
+            default=True if self.type == "boolean" and default is UNSET else default,
             required=self.required,
             help=self.description,
             show_default=(
-                (self.secret or default is None)
+                (self.secret or default is UNSET)
                 or (
                     type_.invert(default)  # type: ignore[arg-type]
                     if default and isinstance(type_, InvertibleParamType)

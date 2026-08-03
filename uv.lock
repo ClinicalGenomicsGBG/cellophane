@@ -53,7 +53,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "attrs", specifier = ">=23.1.0,<24.0.0" },
-    { name = "click", specifier = ">=8.2.0,<9.0.0" },
+    { name = "click", specifier = ">=8.3.0,<9.0.0" },
     { name = "frozendict", specifier = ">=2.3.8,<3.0.0" },
     { name = "gitpython", specifier = ">=3.1.31,<4.0.0" },
     { name = "humanfriendly", specifier = ">=10.0,<11.0" },

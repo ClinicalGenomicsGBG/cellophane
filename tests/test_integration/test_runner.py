@@ -157,3 +157,88 @@ class Test_runners(BaseTest):
             "Runner a: ['a', 'b']",
             "Runner a: ['c', 'd']",
         )
+
+    @mark.override(
+        args=[*args, "--x"],
+        structure={
+            **structure,
+            "schema.yaml": """
+                type: object
+                properties:
+                    x:
+                        type: boolean
+                        default: false
+                    y:
+                        type: boolean
+                        default: false
+            """,
+            "modules/a.py": """
+                from cellophane import runner, Sample
+
+                class TestSample(Sample):
+                    some_key: int = 0
+
+                @runner(condition=lambda s, **_: s.some_key == 1)
+                def runner_1(samples, logger, **_):
+                    logger.info(f"runner_1: {[str(s) for s in samples]}")
+
+                @runner(condition=lambda s, **_: s.some_key == 2)
+                def runner_2(samples, logger, **_):
+                    logger.info(f"runner_2: {[str(s) for s in samples]}")
+
+                @runner(condition=lambda s, config, **_: config.x)
+                def runner_config_x(samples, logger, **_):
+                    logger.info("runner_config_x was invoked")
+
+                @runner(condition=lambda s, config, **_: False)
+                def runner_config_y(samples, logger, **_):
+                    logger.info("runner_config_y was invoked")
+            """,
+            "samples.yaml": """
+                - id: a
+                  some_key: 1
+                  files: ["input/a.txt"]
+                - id: b
+                  some_key: 1
+                  files: ["input/a.txt"]
+                - id: c
+                  some_key: 2
+                  files: ["input/a.txt"]
+                - id: d
+                  some_key: 2
+                  files: ["input/a.txt"]
+            """,
+        }
+    )
+    def test_runner_predicate(self, invocation: Invocation) -> None:
+        assert invocation.logs == literal(
+            "runner_1: ['a', 'b']",
+            "runner_2: ['c', 'd']",
+            "runner_config_x was invoked",
+            "No samples satisfy condition for runner 'runner_config_y', skipping"
+        )
+
+        assert invocation.logs != literal(
+            "No samples satisfy condition for runner 'runner_config_x', skipping"
+            "runner_config_y was invoked",
+        )
+
+    @mark.override(
+        structure={
+            **structure,
+            "modules/a.py": """
+                from cellophane import runner
+
+                @runner(condition="INVALID")
+                def runner_1(samples, logger, **_):
+                    logger.info(f"runner_1 has been invoked")
+
+            """,
+            "samples.yaml": """
+                - id: a
+                  files: ["input/a.txt"]
+            """,
+        }
+    )
+    def test_runner_invalid_condition(self, invocation: Invocation) -> None:
+        assert invocation.logs == literal("Unable to import module 'a': ValueError(\"Invalid condition for runner: 'INVALID'. Must be a callable predicate or None.\")")

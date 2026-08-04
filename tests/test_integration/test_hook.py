@@ -213,6 +213,160 @@ class Test_hooks(BaseTest):
         )
 
     @mark.override(
+        args=[*args, "--samples_file samples.yaml"],
+        structure={
+            "samples.yaml": """
+                - id: x_1
+                  a: x
+                  files:
+                  - input/DUMMY.txt
+                - id: x_2
+                  a: x
+                  files:
+                  - input/DUMMY.txt
+                - id: x_3
+                  a: x
+                  files:
+                  - input/DUMMY.txt
+                - id: y_1
+                  a: y
+                  files:
+                  - input/DUMMY.txt
+                - id: y_2
+                  a: y
+                  files:
+                  - input/DUMMY.txt
+                - id: y_3
+                  a: y
+                  files:
+                  - input/DUMMY.txt
+            """,
+            "input/DUMMY.txt": "DUMMY",
+            "schema.yaml": """
+                type: object
+                properties:
+                    foo:
+                        type: string
+                        default: x
+            """,
+
+            "modules/a.py": """
+                from cellophane import pre_hook, post_hook, Samples, Sample
+
+                class TestSamples(Samples):
+                    foo: str = "y"
+
+                class TestSample(Sample):
+                    a: str | None = None
+
+                @pre_hook(condition=lambda s, **_: s.a == "x")
+                def pre_hook_x(samples, logger, **_):
+                    logger.info(f"pre_hook_x executed for {[s.id for s in samples]}")
+
+                @pre_hook(condition=lambda s, **_: s.a == "y")
+                def pre_hook_y(samples, logger, **_):
+                    logger.info(f"pre_hook_y executed for {[s.id for s in samples]}")
+
+                @pre_hook(condition=lambda s, config, **_: s.a == config.foo)
+                def pre_hook_config(samples, logger, **_):
+                    logger.info(f"pre_hook_config executed for {[s.id for s in samples]}")
+
+                @pre_hook(condition=lambda s, samples, **_: s.a == samples.foo)
+                def pre_hook_samples(samples, logger, **_):
+                    logger.info(f"pre_hook_samples executed for {[s.id for s in samples]}")
+
+                @pre_hook(condition=lambda s, **_: False)
+                def pre_hook_false(samples, logger, **_):
+                    logger.info(f"pre_hook_false executed for {[s.id for s in samples]}")
+
+
+                @post_hook(condition=lambda s, **_: s.a == "x")
+                def post_hook_x(samples, logger, **_):
+                    logger.info(f"post_hook_x executed for {[s.id for s in samples]}")
+
+                @post_hook(condition=lambda s, **_: s.a == "y")
+                def post_hook_y(samples, logger, **_):
+                    logger.info(f"post_hook_y executed for {[s.id for s in samples]}")
+
+                @post_hook(condition=lambda s, config, **_: s.a == config.foo)
+                def post_hook_config(samples, logger, **_):
+                    logger.info(f"post_hook_config executed for {[s.id for s in samples]}")
+
+                @post_hook(condition=lambda s, samples, **_: s.a == samples.foo)
+                def post_hook_samples(samples, logger, **_):
+                    logger.info(f"post_hook_samples executed for {[s.id for s in samples]}")
+
+                @post_hook(condition=lambda s, **_: False)
+                def post_hook_false(samples, logger, **_):
+                    logger.info(f"post_hook_false executed for {[s.id for s in samples]}")
+            """
+        }
+    )
+    def test_predicate_pre_post_hooks(self, invocation: Invocation) -> None:
+        assert invocation.logs == literal(
+            "pre_hook_x executed for ['x_1', 'x_2', 'x_3']",
+            "pre_hook_y executed for ['y_1', 'y_2', 'y_3']",
+            "pre_hook_config executed for ['x_1', 'x_2', 'x_3']",
+            "pre_hook_samples executed for ['y_1', 'y_2', 'y_3']",
+            "No samples satisfy condition for pre-hook 'pre_hook_false', skipping",
+            "post_hook_x executed for ['x_1', 'x_2', 'x_3']",
+            "post_hook_y executed for ['y_1', 'y_2', 'y_3']",
+            "post_hook_config executed for ['x_1', 'x_2', 'x_3']",
+            "post_hook_samples executed for ['y_1', 'y_2', 'y_3']",
+            "No samples satisfy condition for post-hook 'post_hook_false', skipping",
+        )
+
+
+    @mark.override(
+        args=[*args, "--samples_file samples.yaml"],
+        structure={
+            "samples.yaml": """
+                - id: x
+                  files:
+                  - input/DUMMY.txt
+            """,
+            "input/DUMMY.txt": "DUMMY",
+            "schema.yaml": """
+                type: object
+                properties:
+                    foo:
+                        type: string
+                        default: x
+            """,
+
+            "modules/a.py": """
+                from cellophane import exception_hook, pre_hook
+
+                class DummyException(Exception): ...
+
+                @exception_hook(condition=lambda e, **_: isinstance(e, DummyException))
+                def exception_hook_a(exception, logger, **_):
+                    logger.info(f"exception_hook_a executed for exception: {exception!r}")
+
+                @exception_hook(condition=lambda e, **_: isinstance(e, ValueError))
+                def exception_hook_b(exception, logger, **_):
+                    logger.info(f"exception_hook_b executed for exception: {exception!r}")
+
+                @exception_hook(condition=lambda e, config, **_: config.foo == "x")
+                def exception_hook_config(exception, logger, **_):
+                    logger.info(f"exception_hook_config executed for exception: {exception!r}")
+
+                @pre_hook(before="all")
+                def pre_hook_x(**_):
+                    raise DummyException("DUMMY")
+
+
+            """
+        }
+    )
+    def test_predicate_exception_hooks(self, invocation: Invocation) -> None:
+        assert invocation.logs == literal(
+            "exception_hook_a executed for exception: DummyException('DUMMY')",
+            "exception_hook_config executed for exception: DummyException('DUMMY')",
+            "Exception 'DummyException('DUMMY')' does not satisfy condition for exception hook 'exception_hook_b', skipping"
+        )
+
+    @mark.override(
         structure={
             "modules/a.py": """
                 from cellophane import exception_hook
@@ -742,6 +896,20 @@ class Test_hooks(BaseTest):
     @mark.override(
         structure={
             "modules/a.py": """
+                from cellophane import pre_hook
+
+                @pre_hook(condition="INVALID")
+                def a(**_): ...
+            """
+        },
+    )
+    def test_pre_hook_invalid_condition(self, invocation: Invocation) -> None:
+        assert invocation.logs == literal("Unable to import module 'a': ValueError(\"Invalid condition for pre-hook: 'INVALID'. Must be one of 'always', 'unprocessed', 'failed', or a callable predicate.\")")
+
+
+    @mark.override(
+        structure={
+            "modules/a.py": """
                 from cellophane import post_hook
 
                 @post_hook(condition="INVALID")
@@ -749,7 +917,19 @@ class Test_hooks(BaseTest):
             """
         },
     )
-    def test_hook_invalid_condition(self, invocation: Invocation) -> None:
-        assert invocation.logs == literal(
-            "Unable to import module 'a': ValueError(\"condition='INVALID' must be one of 'always', 'complete', 'failed'\")"
-        )
+    def test_post_hook_invalid_condition(self, invocation: Invocation) -> None:
+        assert invocation.logs == literal("Unable to import module 'a': ValueError(\"Invalid condition for post-hook: 'INVALID'. Must be one of 'always', 'complete', 'failed', or a callable predicate.\")")
+
+
+    @mark.override(
+        structure={
+            "modules/a.py": """
+                from cellophane import exception_hook
+
+                @exception_hook(condition="INVALID")
+                def a(**_): ...
+            """
+        },
+    )
+    def test_exception_hook_invalid_condition(self, invocation: Invocation) -> None:
+        assert invocation.logs == literal("Unable to import module 'a': ValueError(\"Invalid condition for exception hook: 'INVALID'. Must be a callable predicate or None.\")")

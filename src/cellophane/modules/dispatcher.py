@@ -4,7 +4,7 @@ from copy import deepcopy
 from functools import partial, wraps
 from logging import LoggerAdapter, getLogger
 from multiprocessing import Lock
-from typing import TYPE_CHECKING, overload
+from typing import TYPE_CHECKING, Callable, overload
 
 from mpire.exception import InterruptWorker
 from mpire.pool import WorkerPool
@@ -13,12 +13,13 @@ from cellophane.logs import handle_warnings, redirect_logging_to_queue
 
 from .checkpoint import Checkpoints
 from .hook import ExceptionHook, PostHook, PreHook
+from .predicate import select_samples
 
 if TYPE_CHECKING:
     from multiprocessing import Queue
     from multiprocessing.synchronize import Lock as LockType
     from pathlib import Path
-    from typing import Any, Callable, Literal, Sequence
+    from typing import Any, Literal, Sequence
     from uuid import UUID
 
     from cellophane.cfg import Config
@@ -157,27 +158,34 @@ def _run_pre_post_hooks(
     samples_ = deepcopy(samples)
 
     for hook in [h for h in hooks if isinstance(h, (PreHook, PostHook)) and (h.when, h.per) == (when, per)]:
-        match hook.condition:
-            case "always" if not (hook_samples := samples_):
-                hook_samples = samples_
-            case "unprocessed" if not (hook_samples := samples_.unprocessed):
-                continue
-            case "complete" if not (hook_samples := samples_.complete):
-                continue
-            case "failed" if not (hook_samples := samples_.failed):
-                continue
-
-        checkpoints = Checkpoints(
-            samples=hook_samples,
-            prefix=(
-                f"{hook.when}-hook.{hook.name}"
-                if checkpoint_suffix is None
-                else f"{hook.when}-hook.{hook.name}.{checkpoint_suffix}"
-            ),
-            workdir=config.workdir / config.tag,  # ty: ignore[unsupported-operator]
-            config=config,
-        )
         try:
+            match hook.condition:
+                case c if c not in ["always", "unprocessed", "complete", "failed"] and not callable(c):
+                    logger.warning(f"Hook '{hook.label}' has an invalid condition '{hook.condition}', skipping")
+                    continue
+                case "always":
+                    hook_samples = samples_
+                case "unprocessed" if not (hook_samples := samples_.unprocessed):
+                    continue
+                case "complete" if not (hook_samples := samples_.complete):
+                    continue
+                case "failed" if not (hook_samples := samples_.failed):
+                    continue
+                case predicate if callable(predicate) and not (hook_samples := select_samples(samples_, config, predicate)):
+                    logger.debug(f"No samples satisfy condition for {hook.when}-hook '{hook.label}', skipping")
+                    continue
+
+            checkpoints = Checkpoints(
+                samples=hook_samples,
+                prefix=(
+                    f"{hook.when}-hook.{hook.name}"
+                    if checkpoint_suffix is None
+                    else f"{hook.when}-hook.{hook.name}.{checkpoint_suffix}"
+                ),
+                workdir=config.workdir / config.tag,
+                config=config,
+            )
+
             samples_ |= hook(
                 samples=hook_samples,
                 config=config,
@@ -216,6 +224,9 @@ def _run_exception_hooks(
 ) -> None:
     for hook in [h for h in hooks if isinstance(h, ExceptionHook)]:
         try:
+            if callable(hook.condition) and not hook.condition(exception, config=config):
+                logger.debug(f"Exception '{exception!r}' does not satisfy condition for exception hook '{hook.label}', skipping")
+                continue
             hook(
                 exception=exception,
                 config=config,
@@ -283,7 +294,11 @@ def _start_runners(
                 for r in runners
                 for g, s in (samples.split(by=r.split_by) if r.split_by else [(None, samples)])
             ):
-                workdir = config.workdir / config.tag / runner_.name  # ty: ignore[unsupported-operator]
+                if callable(runner_.condition) and not (samples_ := select_samples(samples_, config, runner_.condition)):
+                    logger.debug(f"No samples satisfy condition for runner '{runner_.label}', skipping")
+                    continue
+
+                workdir = config.workdir / config.tag / runner_.name
                 if runner_.split_by is not None:
                     workdir /= str(group or "unknown")
                 runner_lock = Lock()

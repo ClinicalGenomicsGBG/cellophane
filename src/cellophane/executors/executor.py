@@ -210,7 +210,7 @@ class Executor:
                     "These arguments define 'pathlib.Path' objects pointing where cellophane expects an executor to "
                     "write the standard output and error streams of the job. In the next major release of cellophane, "
                     "this will raise an exception.",
-                    category=PendingDeprecationWarning,
+                    category=DeprecationWarning,
                 )
 
             self.target(*_args, **kwargs)  # type: ignore[arg-type]

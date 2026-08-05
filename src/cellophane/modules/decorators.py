@@ -6,15 +6,17 @@ from cellophane.data import OutputGlob
 
 from .hook import ExceptionHook, PostHook, PreHook
 from .runner_ import Runner
+from warnings import warn
 
 if TYPE_CHECKING:
     from pathlib import Path
     from typing import Any, Callable, Literal
 
-    from cellophane.data import Samples
+    from cellophane.data import Samples, Sample
     from cellophane.modules.hook import DEPENDENCY_TYPE
     from cellophane.util import NamedCallable
     from cellophane.modules import SAMPLES_PREDICATE, EXCEPTION_PREDICATE
+    from cellophane.cfg import Config
 
 
 def output(
@@ -82,11 +84,26 @@ def output(
 
     return wrapper
 
+def _files_predicate(sample: Sample, /, samples: Samples, config: Config) -> bool:
+    warn(
+        "Skipping and failing samples with no files is deprecated and will be removed in a future cellophane version. "
+        "If you rely on this behavior, please implement a custom runner predicate and fail samples in a pre-hook.",
+        category=DeprecationWarning,
+    )
+    if sample.files:
+        return True
+    else:
+        # NOTE: Mutating samples in a predicate is not recommended, but we will do it here for backwards compatibility.
+        # If you want to emulate this behavior after this is removed, you can implement a pre-hook that fails samples
+        # with no files instead.
+        warn(f"Sample {sample} will be skipped as it has no files")
+        sample.fail("Missing files")
+        return False
 
 def runner(
     label: str | None = None,
     split_by: str | None = None,
-    condition: SAMPLES_PREDICATE | None = None,
+    condition: SAMPLES_PREDICATE | None = _files_predicate,
 ) -> Callable:
     """Decorator for creating a runner.
 

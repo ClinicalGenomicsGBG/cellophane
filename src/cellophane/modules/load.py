@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio as aio
 import sys
 from importlib.util import module_from_spec, spec_from_file_location
+from inspect import getfile
 from site import addsitedir
 from typing import TYPE_CHECKING
 
@@ -48,9 +49,9 @@ async def _async_load(file: Path) -> MODULE_CONTENTS:
     for obj in [getattr(module, a) for a in dir(module)]:
         if is_instance_or_subclass(obj, (PreHook, PostHook, ExceptionHook)):
             hooks.append(obj)
-        elif is_instance_or_subclass(obj, Sample):
+        elif is_instance_or_subclass(obj, Sample) and getfile(obj) == str(file):
             sample_mixins.append(obj)
-        elif is_instance_or_subclass(obj, Samples):
+        elif is_instance_or_subclass(obj, Samples) and getfile(obj) == str(file):
             samples_mixins.append(obj)
         elif is_instance_or_subclass(obj, Runner):
             runners.append(obj)

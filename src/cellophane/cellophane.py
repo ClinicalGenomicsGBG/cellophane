@@ -187,13 +187,6 @@ def _main(
         cleaner=cleaner,
     )
 
-    # Validate sample files
-    # FIXME: Make validation configurable
-    for sample in samples:
-        if sample not in samples.with_files:
-            logger.warning(f"Sample {sample} will be skipped as it has no files")
-            sample.fail("Missing files")
-
     # Start runners for unprocessed samples and mergeback failed samples after
     samples = (
         dispatcher.start_runners(

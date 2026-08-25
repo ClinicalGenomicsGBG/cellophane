@@ -170,8 +170,12 @@ def _main(
     """Run cellophane"""
     # Load samples from file, or create empty samples object
     if "samples_file" in config:
-        logger.debug(f"Loading samples from {config.samples_file}")
-        samples = samples_class.from_file(config.samples_file)
+        try:
+            logger.debug(f"Loading samples from {config.samples_file}")
+            samples = samples_class.from_file(config.samples_file)
+        except Exception as exc:
+            logger.critical(f"Failed to load samples from {config.samples_file}: {exc}")
+            raise SystemExit(1) from exc
     else:
         logger.debug("No samples file specified, creating empty samples object")
         samples = samples_class()

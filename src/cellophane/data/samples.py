@@ -179,7 +179,11 @@ class Sample:  # type: ignore[no-untyped-def]
     def __reduce__(self) -> str | tuple[Any, ...]:
         state = self.__getstate__()
         args = ()
-        kwargs = {"id": state.pop("id")}
+        kwargs = {
+            name: state.pop(name)  # nofmt
+            for name, attribute in fields_dict(self.__class__).items()
+            if attribute.kw_only
+        }
         return (_reconstruct, (Sample, self._mixins, args, kwargs, state))
 
     def __and__(self, other: "Sample") -> "Sample":
@@ -321,7 +325,11 @@ class Samples(UserList[S]):
     def __reduce__(self) -> str | tuple[Any, ...]:
         state = self.__getstate__()
         args = ()
-        kwargs: dict[str, Any] = {}
+        kwargs = {
+            name: state.pop(name)  # nofmt
+            for name, attribute in fields_dict(self.__class__).items()
+            if attribute.kw_only
+        }
         cls_kwargs = {"sample_class": self.sample_class}
         return (_reconstruct, (Samples, self._mixins, args, kwargs, state, cls_kwargs))
 
@@ -405,12 +413,24 @@ class Samples(UserList[S]):
         """Get samples from a YAML file"""
         samples = []
         yaml = YAML(typ="safe")
-        for sample in yaml.load(path):
-            _id = sample.pop("id")
-            samples.append(
-                cls.sample_class(id=str(_id), **sample),  # type: ignore[call-arg]
-            )
-        return cls(samples)
+
+        try:
+            for sample in yaml.load(path):
+                samples.append(cls.sample_class(**sample)),  # type: ignore[call-arg]
+            return cls(samples)
+        except TypeError as exc:
+            import attrs
+            missing_fields = [
+                repr(f.name)  # nofmt
+                for f in attrs.fields(cls.sample_class)
+                if f.name not in sample
+                and f.init is True
+                and f.default is attrs.NOTHING
+            ]
+            if missing_fields:
+                raise TypeError(f"Missing required field(s) {', '.join(missing_fields)} for at least one sample") from exc
+            else:
+                raise exc
 
     @classmethod
     def with_mixins(cls, mixins: Sequence[type[Samples]]) -> type[Samples]:

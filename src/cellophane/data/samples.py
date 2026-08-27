@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, TypeVar, overload
 from uuid import UUID, uuid4
 from warnings import warn
 
-from attrs import define, field, fields_dict, make_class
+from attrs import NOTHING, define, field, fields, fields_dict, make_class
 from attrs.setters import convert, frozen
 from ruamel.yaml import YAML
 
@@ -425,13 +425,12 @@ class Samples(UserList[S]):
                 samples.append(cls.sample_class(**sample)),  # type: ignore[call-arg]
             return cls(samples)
         except TypeError as exc:
-            import attrs
             missing_fields = [
                 repr(f.name)  # nofmt
-                for f in attrs.fields(cls.sample_class)
+                for f in fields(cls.sample_class)
                 if f.name not in sample
                 and f.init is True
-                and f.default is attrs.NOTHING
+                and f.default is NOTHING
             ]
             if missing_fields:
                 raise TypeError(f"Missing required field(s) {', '.join(missing_fields)} for at least one sample") from exc

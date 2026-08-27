@@ -308,7 +308,11 @@ def _start_runners(
                     continue
 
                 if runner.split_by is not None:
-                    split_samples = runner_samples.split(by=runner.split_by)
+                    split_samples = runner_samples.split(
+                        by=runner.split_by,
+                        samples=runner_samples,
+                        config=config
+                    )
                 else:
                     split_samples = [(None, runner_samples)]
 

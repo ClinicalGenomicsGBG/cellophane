@@ -59,3 +59,31 @@ def select_samples(samples: SAMPLES, config: Config, predicate: SAMPLES_PREDICAT
     except Exception as exc:
         warn(f"Predicate function '{name}' raised an exception: {exc!r}")
         return None
+
+def select_exception(exception: BaseException, config: Config, predicate: EXCEPTION_PREDICATE, /) -> bool:
+    """
+    Evaluate an exception against a predicate function.
+
+    The predicate can accept zero or more of the 'exception' and 'config' keyword arguments.
+
+    Args:
+        exception (BaseException): The exception to evaluate.
+        config (Config): The configuration object.
+        predicate (EXCEPTION_PREDICATE): The predicate function to apply.
+
+    Returns:
+        bool: True if the exception satisfies the predicate, False otherwise.
+    """
+    sig = signature(predicate)
+    kwargs = {}
+    name = getattr(predicate, "__qualname__", getattr(predicate, "__name__", repr(predicate)))
+
+    if "config" in sig.parameters:
+        kwargs["config"] = config
+    if "exception" in sig.parameters:
+        kwargs["exception"] = exception
+    try:
+        return predicate(**kwargs)
+    except Exception as exc:
+        warn(f"Predicate function '{name}' raised an exception: {exc!r}")
+        return False

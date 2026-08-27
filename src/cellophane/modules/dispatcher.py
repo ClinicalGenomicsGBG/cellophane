@@ -13,7 +13,7 @@ from cellophane.logs import handle_warnings, redirect_logging_to_queue
 
 from .checkpoint import Checkpoints
 from .hook import ExceptionHook, PostHook, PreHook
-from .predicate import select_samples
+from .predicate import select_samples, select_exception
 
 if TYPE_CHECKING:
     from multiprocessing import Queue
@@ -229,18 +229,22 @@ def _run_exception_hooks(
 ) -> None:
     for hook in [h for h in hooks if isinstance(h, ExceptionHook)]:
         try:
-            if callable(hook.condition) and not hook.condition(exception, config=config):
-                logger.debug(f"Exception '{exception!r}' does not satisfy condition for exception hook '{hook.label}', skipping")
+            if callable(hook.condition) and not select_exception(exception, config, hook.condition):
+                logger.debug(
+                    f"Exception {exception!r} does not satisfy condition "
+                    f"for exception hook '{hook.label}', skipping"
+                )
                 continue
-            hook(
-                exception=exception,
-                config=config,
-                root=root,
-                executor_cls=executor_cls,
-                log_queue=log_queue,
-                timestamp=timestamp,
-                dispatcher=dispatcher,
-            )
+            else:
+                hook(
+                    exception=exception,
+                    config=config,
+                    root=root,
+                    executor_cls=executor_cls,
+                    log_queue=log_queue,
+                    timestamp=timestamp,
+                    dispatcher=dispatcher,
+                )
         except Exception as exc:
             logger.error(f"Unhandled exception in exception hook '{hook.label}': {exc!r}", exc_info=True)
 

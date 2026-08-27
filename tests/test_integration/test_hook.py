@@ -401,53 +401,66 @@ class Test_hooks(BaseTest):
 
 
     @mark.override(
-        args=[*args, "--samples_file samples.yaml"],
+        args=[*args, "--foo x", "--bar DUMMY"],
         structure={
-            "samples.yaml": """
-                - id: x
-                  files:
-                  - input/DUMMY.txt
-            """,
-            "input/DUMMY.txt": "DUMMY",
             "schema.yaml": """
                 type: object
                 properties:
                     foo:
                         type: string
-                        default: x
+                    bar:
+                        type: string
             """,
-
             "modules/a.py": """
                 from cellophane import exception_hook, pre_hook
 
-                class DummyException(Exception): ...
+                class MyException(Exception): ...
 
-                @exception_hook(condition=lambda e, **_: isinstance(e, DummyException))
-                def exception_hook_a(exception, logger, **_):
-                    logger.info(f"exception_hook_a executed for exception: {exception!r}")
+                @pre_hook()
+                def throw_exception(**_):
+                    raise MyException("DUMMY")
 
-                @exception_hook(condition=lambda e, **_: isinstance(e, ValueError))
-                def exception_hook_b(exception, logger, **_):
-                    logger.info(f"exception_hook_b executed for exception: {exception!r}")
+                @exception_hook(condition=lambda: False)
+                def exception_hook_false(logger, **_):
+                    logger.info("exception_hook_false executed")
 
-                @exception_hook(condition=lambda e, config, **_: config.foo == "x")
-                def exception_hook_config(exception, logger, **_):
-                    logger.info(f"exception_hook_config executed for exception: {exception!r}")
+                @exception_hook(condition=lambda: True)
+                def exception_hook_true(logger, **_):
+                    logger.info("exception_hook_true executed")
 
-                @pre_hook(before="all")
-                def pre_hook_x(**_):
-                    raise DummyException("DUMMY")
+                @exception_hook(condition=lambda config: config.foo == "x")
+                def exception_hook_config_true(logger, **_):
+                    logger.info("exception_hook_config_true executed")
 
+                @exception_hook(condition=lambda config: config.foo == "y")
+                def exception_hook_config_false(logger, **_):
+                    logger.info("exception_hook_config_false executed")
 
+                @exception_hook(condition=lambda exception: isinstance(exception, MyException))
+                def exception_hook_exception_class(logger, **_):
+                    logger.info("exception_hook_exception_class executed")
+
+                @exception_hook(condition=lambda exception, config: config.bar in exception.args)
+                def exception_hook_exception_complex(logger, **_):
+                    logger.info("exception_hook_exception_complex executed")
             """
-        }
+        },
     )
-    def test_predicate_exception_hooks(self, invocation: Invocation) -> None:
+    def test_exception_hook_predicate(self, invocation: Invocation) -> None:
+        assert invocation.exit_code == 0
         assert invocation.logs == literal(
-            "exception_hook_a executed for exception: DummyException('DUMMY')",
-            "exception_hook_config executed for exception: DummyException('DUMMY')",
-            "Exception 'DummyException('DUMMY')' does not satisfy condition for exception hook 'exception_hook_b', skipping"
+            "Exception MyException('DUMMY') does not satisfy condition for exception hook 'exception_hook_config_false', skipping",
+            "Exception MyException('DUMMY') does not satisfy condition for exception hook 'exception_hook_false', skipping",
+            "exception_hook_true executed",
+            "exception_hook_config_true executed",
+            "exception_hook_exception_class executed",
+            "exception_hook_exception_complex executed",
         )
+        assert invocation.logs != literal(
+            "exception_hook_false executed",
+            "exception_hook_config_false executed",
+        )
+
 
     @mark.override(
         structure={

@@ -84,7 +84,7 @@ def output(
 
     return wrapper
 
-def _files_predicate(sample: Sample, /, samples: Samples, config: Config) -> bool:
+def _files_predicate(sample: Sample, samples: Samples, config: Config) -> bool:
     warn(
         "Skipping and failing samples with no files is deprecated and will be removed in a future cellophane version. "
         "If you rely on this behavior, please implement a custom runner predicate and fail samples in a pre-hook.",

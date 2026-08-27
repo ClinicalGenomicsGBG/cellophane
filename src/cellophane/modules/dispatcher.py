@@ -159,6 +159,7 @@ def _run_pre_post_hooks(
 
     for hook in [h for h in hooks if isinstance(h, (PreHook, PostHook)) and (h.when, h.per) == (when, per)]:
         try:
+            hook_samples = None
             match hook.condition:
                 case c if c not in ["always", "unprocessed", "complete", "failed"] and not callable(c):
                     logger.warning(f"Hook '{hook.label}' has an invalid condition '{hook.condition}', skipping")
@@ -171,9 +172,13 @@ def _run_pre_post_hooks(
                     continue
                 case "failed" if not (hook_samples := samples_.failed):
                     continue
-                case predicate if callable(predicate) and not (hook_samples := select_samples(samples_, config, predicate)):
-                    logger.debug(f"No samples satisfy condition for {hook.when}-hook '{hook.label}', skipping")
+                case predicate if callable(predicate) and (hook_samples := select_samples(samples_, config, predicate)) is None:
+                    logger.debug(f"No samples satisfy condition for {when}-hook '{hook.label}', skipping")
                     continue
+
+            if hook_samples is None:
+                logger.warning(f"Hook '{hook.label}' has an invalid condition '{hook.condition}', skipping")
+                continue
 
             checkpoints = Checkpoints(
                 samples=hook_samples,
@@ -289,52 +294,56 @@ def _start_runners(
         shared_objects=log_queue,
     ) as pool:
         try:
-            for runner_, group, samples_ in (
-                (r, g, s)
-                for r in runners
-                for g, s in (samples.split(by=r.split_by) if r.split_by else [(None, samples)])
-            ):
-                if callable(runner_.condition) and not (samples_ := select_samples(samples_, config, runner_.condition)):
-                    logger.debug(f"No samples satisfy condition for runner '{runner_.label}', skipping")
+            for runner in runners:
+                workdir = config.workdir / config.tag / runner.name
+
+                if not callable(runner.condition):
+                    runner_samples = samples
+                elif not (runner_samples := select_samples(samples, config, runner.condition)):
+                    logger.debug(f"No samples satisfy condition for runner '{runner.label}', skipping")
                     continue
 
-                workdir = config.workdir / config.tag / runner_.name
-                if runner_.split_by is not None:
-                    workdir /= str(group or "unknown")
-                runner_lock = Lock()
-                runner_lock.acquire()
-                runner_locks.append(runner_lock)
-                for sample in samples_:
-                    sample_runner_count[sample.uuid] += 1
+                if runner.split_by is not None:
+                    split_samples = runner_samples.split(by=runner.split_by)
+                else:
+                    split_samples = [(None, runner_samples)]
 
-                pool.apply_async(
-                    runner_,
-                    kwargs={
-                        "config": config,
-                        "root": root,
-                        "samples": samples_,
-                        "executor_cls": executor_cls,
-                        "timestamp": timestamp,
-                        "workdir": workdir,
-                        "group": group,
-                        "dispatcher": dispatcher,
-                    },
-                    callback=partial(
-                        _runner_callback,
-                        logger=logger,
-                        samples=result_samples,
-                        sample_runner_count=sample_runner_count,
-                        cleaner=cleaner,
-                        runner_lock=runner_lock,
-                        dispatcher=dispatcher,
-                        pool=pool,
-                    ),
-                    error_callback=partial(
-                        _runner_error_callback,
-                        runner_lock=runner_lock,
-                        logger=logger,
-                    ),
-                )
+                for group, group_samples in split_samples:
+                    if runner.split_by is not None:
+                        workdir /= str(group or "unknown")
+                    (runner_lock := Lock()).acquire()
+                    runner_locks.append(runner_lock)
+                    for sample in group_samples:
+                        sample_runner_count[sample.uuid] += 1
+
+                    pool.apply_async(
+                        runner,
+                        kwargs={
+                            "config": config,
+                            "root": root,
+                            "samples": group_samples,
+                            "executor_cls": executor_cls,
+                            "timestamp": timestamp,
+                            "workdir": workdir,
+                            "group": group,
+                            "dispatcher": dispatcher,
+                        },
+                        callback=partial(
+                            _runner_callback,
+                            logger=logger,
+                            samples=result_samples,
+                            sample_runner_count=sample_runner_count,
+                            cleaner=cleaner,
+                            runner_lock=runner_lock,
+                            dispatcher=dispatcher,
+                            pool=pool,
+                        ),
+                        error_callback=partial(
+                            _runner_error_callback,
+                            runner_lock=runner_lock,
+                            logger=logger,
+                        ),
+                    )
             for lock in runner_locks:
                 lock.acquire()
         except KeyboardInterrupt:

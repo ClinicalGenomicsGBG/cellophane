@@ -178,21 +178,25 @@ class Test_runners(BaseTest):
                 class TestSample(Sample):
                     some_key: int = 0
 
-                @runner(condition=lambda s, **_: s.some_key == 1)
+                @runner(condition=lambda sample: sample.some_key == 1)
                 def runner_1(samples, logger, **_):
                     logger.info(f"runner_1: {[str(s) for s in samples]}")
 
-                @runner(condition=lambda s, **_: s.some_key == 2)
+                @runner(condition=lambda sample: sample.some_key == 2)
                 def runner_2(samples, logger, **_):
                     logger.info(f"runner_2: {[str(s) for s in samples]}")
 
-                @runner(condition=lambda s, config, **_: config.x)
+                @runner(condition=lambda config: config.x)
                 def runner_config_x(samples, logger, **_):
                     logger.info("runner_config_x was invoked")
 
-                @runner(condition=lambda s, config, **_: False)
-                def runner_config_y(samples, logger, **_):
-                    logger.info("runner_config_y was invoked")
+                @runner(condition=lambda: False)
+                def runner_false(samples, logger, **_):
+                    logger.info("runner_false was invoked")
+
+                @runner(condition=lambda: True)
+                def runner_true(samples, logger, **_):
+                    logger.info("runner_true was invoked")
             """,
             "samples.yaml": """
                 - id: a
@@ -215,11 +219,11 @@ class Test_runners(BaseTest):
             "runner_1: ['a', 'b']",
             "runner_2: ['c', 'd']",
             "runner_config_x was invoked",
-            "No samples satisfy condition for runner 'runner_config_y', skipping"
+            "runner_true was invoked",
+            "No samples satisfy condition for runner 'runner_false', skipping"
         )
 
         assert invocation.logs != literal(
-            "No samples satisfy condition for runner 'runner_config_x', skipping"
             "runner_config_y was invoked",
         )
 

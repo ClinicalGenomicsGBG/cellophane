@@ -259,44 +259,52 @@ class Test_hooks(BaseTest):
                 class TestSample(Sample):
                     a: str | None = None
 
-                @pre_hook(condition=lambda s, **_: s.a == "x")
+                @pre_hook(condition=lambda sample: sample.a == "x")
                 def pre_hook_x(samples, logger, **_):
                     logger.info(f"pre_hook_x executed for {[s.id for s in samples]}")
 
-                @pre_hook(condition=lambda s, **_: s.a == "y")
+                @pre_hook(condition=lambda sample: sample.a == "y")
                 def pre_hook_y(samples, logger, **_):
                     logger.info(f"pre_hook_y executed for {[s.id for s in samples]}")
 
-                @pre_hook(condition=lambda s, config, **_: s.a == config.foo)
+                @pre_hook(condition=lambda sample, config: sample.a == config.foo)
                 def pre_hook_config(samples, logger, **_):
                     logger.info(f"pre_hook_config executed for {[s.id for s in samples]}")
 
-                @pre_hook(condition=lambda s, samples, **_: s.a == samples.foo)
+                @pre_hook(condition=lambda sample, samples: sample.a == samples.foo)
                 def pre_hook_samples(samples, logger, **_):
                     logger.info(f"pre_hook_samples executed for {[s.id for s in samples]}")
 
-                @pre_hook(condition=lambda s, **_: False)
+                @pre_hook(condition=lambda: True)
+                def pre_hook_true(samples, logger, **_):
+                    logger.info(f"pre_hook_true executed for {[s.id for s in samples]}")
+
+                @pre_hook(condition=lambda: False)
                 def pre_hook_false(samples, logger, **_):
                     logger.info(f"pre_hook_false executed for {[s.id for s in samples]}")
 
 
-                @post_hook(condition=lambda s, **_: s.a == "x")
+                @post_hook(condition=lambda sample: sample.a == "x")
                 def post_hook_x(samples, logger, **_):
                     logger.info(f"post_hook_x executed for {[s.id for s in samples]}")
 
-                @post_hook(condition=lambda s, **_: s.a == "y")
+                @post_hook(condition=lambda sample: sample.a == "y")
                 def post_hook_y(samples, logger, **_):
                     logger.info(f"post_hook_y executed for {[s.id for s in samples]}")
 
-                @post_hook(condition=lambda s, config, **_: s.a == config.foo)
+                @post_hook(condition=lambda sample, config: sample.a == config.foo)
                 def post_hook_config(samples, logger, **_):
                     logger.info(f"post_hook_config executed for {[s.id for s in samples]}")
 
-                @post_hook(condition=lambda s, samples, **_: s.a == samples.foo)
+                @post_hook(condition=lambda sample, samples: sample.a == samples.foo)
                 def post_hook_samples(samples, logger, **_):
                     logger.info(f"post_hook_samples executed for {[s.id for s in samples]}")
 
-                @post_hook(condition=lambda s, **_: False)
+                @pre_hook(condition=lambda: True)
+                def pre_hook_true(samples, logger, **_):
+                    logger.info(f"pre_hook_true executed for {[s.id for s in samples]}")
+
+                @post_hook(condition=lambda: False)
                 def post_hook_false(samples, logger, **_):
                     logger.info(f"post_hook_false executed for {[s.id for s in samples]}")
             """
@@ -308,24 +316,20 @@ class Test_hooks(BaseTest):
             "pre_hook_y executed for ['y_1', 'y_2', 'y_3']",
             "pre_hook_config executed for ['x_1', 'x_2', 'x_3']",
             "pre_hook_samples executed for ['y_1', 'y_2', 'y_3']",
+            "pre_hook_true executed for ['x_1', 'x_2', 'x_3', 'y_1', 'y_2', 'y_3']",
             "No samples satisfy condition for pre-hook 'pre_hook_false', skipping",
             "post_hook_x executed for ['x_1', 'x_2', 'x_3']",
             "post_hook_y executed for ['y_1', 'y_2', 'y_3']",
             "post_hook_config executed for ['x_1', 'x_2', 'x_3']",
             "post_hook_samples executed for ['y_1', 'y_2', 'y_3']",
+            "pre_hook_true executed for ['x_1', 'x_2', 'x_3', 'y_1', 'y_2', 'y_3']",
             "No samples satisfy condition for post-hook 'post_hook_false', skipping",
+
         )
 
 
     @mark.override(
-        args=[*args, "--samples_file samples.yaml"],
         structure={
-            "samples.yaml": """
-                - id: x
-                  files:
-                  - input/DUMMY.txt
-            """,
-            "input/DUMMY.txt": "DUMMY",
             "schema.yaml": """
                 type: object
                 properties:
@@ -333,38 +337,130 @@ class Test_hooks(BaseTest):
                         type: string
                         default: x
             """,
-
             "modules/a.py": """
-                from cellophane import exception_hook, pre_hook
+                from cellophane import pre_hook, post_hook, Samples, Sample
 
-                class DummyException(Exception): ...
+                def _throw_exception():
+                    raise Exception("DUMMY")
 
-                @exception_hook(condition=lambda e, **_: isinstance(e, DummyException))
-                def exception_hook_a(exception, logger, **_):
-                    logger.info(f"exception_hook_a executed for exception: {exception!r}")
+                @pre_hook(condition=lambda config: config.foo == "x")
+                def pre_hook_config(samples, logger, **_):
+                    logger.info(f"pre_hook_config executed")
 
-                @exception_hook(condition=lambda e, **_: isinstance(e, ValueError))
-                def exception_hook_b(exception, logger, **_):
-                    logger.info(f"exception_hook_b executed for exception: {exception!r}")
+                @pre_hook(condition=lambda: True)
+                def pre_hook_true(samples, logger, **_):
+                    logger.info(f"pre_hook_true executed")
 
-                @exception_hook(condition=lambda e, config, **_: config.foo == "x")
-                def exception_hook_config(exception, logger, **_):
-                    logger.info(f"exception_hook_config executed for exception: {exception!r}")
+                @pre_hook(condition=lambda: False)
+                def pre_hook_false(samples, logger, **_):
+                    logger.info(f"pre_hook_false executed")
 
-                @pre_hook(before="all")
-                def pre_hook_x(**_):
-                    raise DummyException("DUMMY")
+                @pre_hook(condition=_throw_exception)
+                def pre_hook_exception(samples, logger, **_):
+                    logger.info(f"pre_hook_exception executed")
 
+                @post_hook(condition=lambda config: config.foo == "x")
+                def post_hook_config(samples, logger, **_):
+                    logger.info(f"post_hook_config executed")
 
+                @post_hook(condition=lambda: True)
+                def post_hook_true(samples, logger, **_):
+                    logger.info(f"post_hook_true executed")
+
+                @post_hook(condition=lambda: False)
+                def post_hook_false(samples, logger, **_):
+                    logger.info(f"post_hook_false executed")
+
+                @post_hook(condition=_throw_exception)
+                def post_hook_exception(samples, logger, **_):
+                    logger.info(f"post_hook_exception executed")
             """
         }
     )
-    def test_predicate_exception_hooks(self, invocation: Invocation) -> None:
+    def test_predicate_pre_post_hooks_no_samples(self, invocation: Invocation) -> None:
+        assert invocation.exit_code == 0
         assert invocation.logs == literal(
-            "exception_hook_a executed for exception: DummyException('DUMMY')",
-            "exception_hook_config executed for exception: DummyException('DUMMY')",
-            "Exception 'DummyException('DUMMY')' does not satisfy condition for exception hook 'exception_hook_b', skipping"
+            "pre_hook_config executed",
+            "pre_hook_true executed",
+            "No samples satisfy condition for pre-hook 'pre_hook_false', skipping",
+            "No samples satisfy condition for pre-hook 'pre_hook_exception', skipping",
+            "post_hook_config executed",
+            "post_hook_true executed",
+            "No samples satisfy condition for post-hook 'post_hook_false', skipping",
+            "No samples satisfy condition for post-hook 'post_hook_exception', skipping",
+            "Predicate function '_throw_exception' raised an exception: Exception('DUMMY')",
         )
+        assert invocation.logs != literal(
+            "No samples satisfy condition for pre-hook 'pre_hook_config', skipping",
+            "No samples satisfy condition for post-hook 'post_hook_config', skipping",
+            "pre_hook_false executed",
+            "post_hook_false executed",
+            "pre_hook_exception executed",
+            "post_hook_exception executed",
+        )
+
+
+    @mark.override(
+        args=[*args, "--foo x", "--bar DUMMY"],
+        structure={
+            "schema.yaml": """
+                type: object
+                properties:
+                    foo:
+                        type: string
+                    bar:
+                        type: string
+            """,
+            "modules/a.py": """
+                from cellophane import exception_hook, pre_hook
+
+                class MyException(Exception): ...
+
+                @pre_hook()
+                def throw_exception(**_):
+                    raise MyException("DUMMY")
+
+                @exception_hook(condition=lambda: False)
+                def exception_hook_false(logger, **_):
+                    logger.info("exception_hook_false executed")
+
+                @exception_hook(condition=lambda: True)
+                def exception_hook_true(logger, **_):
+                    logger.info("exception_hook_true executed")
+
+                @exception_hook(condition=lambda config: config.foo == "x")
+                def exception_hook_config_true(logger, **_):
+                    logger.info("exception_hook_config_true executed")
+
+                @exception_hook(condition=lambda config: config.foo == "y")
+                def exception_hook_config_false(logger, **_):
+                    logger.info("exception_hook_config_false executed")
+
+                @exception_hook(condition=lambda exception: isinstance(exception, MyException))
+                def exception_hook_exception_class(logger, **_):
+                    logger.info("exception_hook_exception_class executed")
+
+                @exception_hook(condition=lambda exception, config: config.bar in exception.args)
+                def exception_hook_exception_complex(logger, **_):
+                    logger.info("exception_hook_exception_complex executed")
+            """
+        },
+    )
+    def test_exception_hook_predicate(self, invocation: Invocation) -> None:
+        assert invocation.exit_code == 0
+        assert invocation.logs == literal(
+            "Exception MyException('DUMMY') does not satisfy condition for exception hook 'exception_hook_config_false', skipping",
+            "Exception MyException('DUMMY') does not satisfy condition for exception hook 'exception_hook_false', skipping",
+            "exception_hook_true executed",
+            "exception_hook_config_true executed",
+            "exception_hook_exception_class executed",
+            "exception_hook_exception_complex executed",
+        )
+        assert invocation.logs != literal(
+            "exception_hook_false executed",
+            "exception_hook_config_false executed",
+        )
+
 
     @mark.override(
         structure={

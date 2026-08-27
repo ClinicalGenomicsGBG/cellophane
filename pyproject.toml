@@ -1,6 +1,6 @@
 [project]
 name = "cellophane"
-version = "1.3.0-dev+080ac49"
+version = "1.3.0-dev+f3f27f2"
 description = "Library for feature-rich wrapper development"
 authors = [{name = "Erik Demitz-Helin",email = "erik.demitz-helin@gu.se"}]
 readme = "README.md"

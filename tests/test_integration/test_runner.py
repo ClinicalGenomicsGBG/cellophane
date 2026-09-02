@@ -159,6 +159,54 @@ class Test_runners(BaseTest):
         )
 
     @mark.override(
+        args=[*args, "--batch_size 3"],
+        structure={
+            **structure,
+            "schema.yaml": """
+                type: object
+                properties:
+                    batch_size:
+                        type: integer
+            """,
+            "modules/a.py": """
+                from cellophane import runner, Sample
+
+                class TestSample(Sample):
+                    some_key: int = 0
+
+                @runner(split_by=lambda sample: sample.some_key > 9000)
+                def a(samples, logger, **_):
+                    logger.info(f"Runner a: {[str(s) for s in samples]}")
+
+                @runner(split_by=lambda sample, samples, config: samples.index(sample) // config.batch_size)
+                def b(samples, logger, **_):
+                    logger.info(f"Runner b: {[str(s) for s in samples]}")
+            """,
+            "samples.yaml": """
+                - id: a
+                  some_key: 1337
+                  files: ["input/a.txt"]
+                - id: b
+                  some_key: 1338
+                  files: ["input/a.txt"]
+                - id: c
+                  some_key: 9001
+                  files: ["input/a.txt"]
+                - id: d
+                  some_key: 9002
+                  files: ["input/a.txt"]
+            """,
+        }
+    )
+    def test_runner_split_by_function(self, invocation: Invocation) -> None:
+        assert invocation.logs == literal(
+            "Runner a: ['a', 'b']",
+            "Runner a: ['c', 'd']",
+            "Runner b: ['a', 'b', 'c']",
+            "Runner b: ['d']",
+        )
+
+    @mark.override(
         args=[*args, "--x"],
         structure={
             **structure,

@@ -102,7 +102,7 @@ def _files_predicate(sample: Sample, samples: Samples, config: Config) -> bool:
 
 def runner(
     label: str | None = None,
-    split_by: str | None = None,
+    split_by: str | Callable | None = None,
     condition: SAMPLES_PREDICATE | None = _files_predicate,
 ) -> Callable:
     """Decorator for creating a runner.
@@ -110,7 +110,8 @@ def runner(
     Args:
     ----
         label (str | None): The label for the runner. Defaults to None.
-        split_by (str | None): The attribute to link samples by. Defaults to None.
+        split_by (str | Callable | None): The attribute to link samples by or a callable that determines the grouping
+            of samples. Defaults to None.
         condition (SAMPLES_PREDICATE | None): An optional predicate function to
             determine whether a sample should be processed by the runner.
 

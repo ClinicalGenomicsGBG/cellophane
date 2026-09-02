@@ -4,11 +4,13 @@ from __future__ import annotations
 from collections import UserList
 from contextlib import suppress
 from copy import deepcopy
+from inspect import signature
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, TypeVar, overload
 from uuid import UUID, uuid4
+from warnings import warn
 
-from attrs import define, field, fields_dict, make_class
+from attrs import NOTHING, define, field, fields, fields_dict, make_class
 from attrs.setters import convert, frozen
 from ruamel.yaml import YAML
 
@@ -18,11 +20,15 @@ from .merger import Merger
 from .util import convert_path_list
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from typing import Any, Iterable, Literal, Sequence
 
     from cellophane.data import Output, OutputGlob
 
 S = TypeVar("S", bound="Sample")
+
+
+class SplitFunctionError(Exception): ...
 
 @overload
 def _apply_mixins(
@@ -419,13 +425,12 @@ class Samples(UserList[S]):
                 samples.append(cls.sample_class(**sample)),  # type: ignore[call-arg]
             return cls(samples)
         except TypeError as exc:
-            import attrs
             missing_fields = [
                 repr(f.name)  # nofmt
-                for f in attrs.fields(cls.sample_class)
+                for f in fields(cls.sample_class)
                 if f.name not in sample
                 and f.init is True
-                and f.default is attrs.NOTHING
+                and f.default is NOTHING
             ]
             if missing_fields:
                 raise TypeError(f"Missing required field(s) {', '.join(missing_fields)} for at least one sample") from exc
@@ -472,14 +477,14 @@ class Samples(UserList[S]):
         """
         return type(cls.__name__, (cls,), {"sample_class": sample_class})  # ty: ignore[invalid-return-type]
 
-    def split(self, by: str | None = "uuid") -> Iterable[tuple[Any, Samples[S]]]:
+    def split(self, by: str | Callable | None = "uuid", **kwargs) -> Iterable[tuple[Any, Samples[S]]]:
         """Splits the data into groups based on the specified attribute value.
 
         Args:
         ----
-            by (str | None): The attribute to link the samples by.
-                Defaults to None, which results in Samples objects with one
-                sample each.
+            by (str | Callable | None): The attribute to link the samples by, or a callable
+                that takes a sample and returns the value to link by. Defaults to "uuid",
+                which results in Samples objects with one sample each.
 
         Yields:
         ------
@@ -523,11 +528,48 @@ class Samples(UserList[S]):
 
         """
         if by is None:
-            yield None, self
+            return [(None, self)]
+        elif callable(by):
+            def _by(sample: S, **kwargs) -> Any:
+                sig = signature(by)
+                kwargs["sample"] = sample
+                kwargs = {k: v for k, v in kwargs.items() if k in sig.parameters}
+                try:
+                    result = by(**kwargs)  # ty: ignore[call-top-callable]
+                except Exception as exc:
+                    raise SplitFunctionError(
+                        f"Error calling 'by' callable {by!r} with sample "
+                        f"{sample!r} and kwargs {kwargs!r}: {exc}"
+                    ) from exc
+                return result
+
+        elif isinstance(by, str):
+            def _by(sample: S, **kwargs) -> Any:
+                del kwargs  # unused
+                return getattr(sample, by)
         else:
-            yield from {
-                sample[by]: self.__class__([li for li in self if li[by] == sample[by]]) for sample in self
-            }.items()
+            raise TypeError("Argument 'by' must be a string or a callable that returns a grouping value")
+
+        grouped_samples: dict[Any, Samples[S]] = {}
+        for sample in self:
+            try:
+                group_var = _by(sample=sample, **kwargs)
+            except AttributeError:
+                group_var = None
+            except SplitFunctionError as exc:
+                warn(str(exc))
+                group_var = None
+            except Exception as exc:
+                warn(f"Error getting group for sample {sample!r}: {exc}")
+                group_var = None
+            try:
+                group = grouped_samples[group_var]
+            except KeyError:
+                group = grouped_samples[group_var] = self.__class__()
+            group.append(sample)
+
+        return list(grouped_samples.items())
+
 
     @property
     def unique_ids(self) -> set[str]:

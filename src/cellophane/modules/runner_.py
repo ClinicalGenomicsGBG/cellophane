@@ -98,7 +98,7 @@ class Runner:
     """
 
     label: str
-    split_by: str | None
+    split_by: str | Callable | None
     func: Callable
     main: Callable[..., Samples | None]
     condition: SAMPLES_PREDICATE | None
@@ -107,7 +107,7 @@ class Runner:
         self,
         func: Callable,
         label: str | None = None,
-        split_by: str | None = None,
+        split_by: str | Callable | None = None,
         condition: SAMPLES_PREDICATE | None = None,
     ) -> None:
         self.__name__ = func.__name__  # type: ignore[attr-defined]

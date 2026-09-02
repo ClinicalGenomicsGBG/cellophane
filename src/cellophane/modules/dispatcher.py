@@ -317,10 +317,17 @@ def _start_runners(
                     split_samples = [(None, runner_samples)]
 
                 for group, group_samples in split_samples:
-                    if runner.split_by is not None:
-                        workdir /= str(group or "unknown")
                     (runner_lock := Lock()).acquire()
                     runner_locks.append(runner_lock)
+                    if runner.split_by is None:
+                        group_workdir = workdir
+                    elif group is None:
+                        group_workdir = workdir / "unknown"
+                    elif isinstance(group, (str, int, bool)):
+                        group_workdir = workdir / str(group)
+                    else:
+                        hash_ = hash(group).to_bytes(8, "big", signed=True).hex()
+                        group_workdir = workdir / hash_
                     for sample in group_samples:
                         sample_runner_count[sample.uuid] += 1
 
@@ -332,7 +339,7 @@ def _start_runners(
                             "samples": group_samples,
                             "executor_cls": executor_cls,
                             "timestamp": timestamp,
-                            "workdir": workdir,
+                            "workdir": group_workdir,
                             "group": group,
                             "dispatcher": dispatcher,
                         },

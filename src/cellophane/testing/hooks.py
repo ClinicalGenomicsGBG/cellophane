@@ -6,7 +6,6 @@ import sys
 from pathlib import Path
 from traceback import format_exception
 from typing import TYPE_CHECKING, Iterable
-from cellophane.data.merger import Merger
 
 from pytest import fixture, hookimpl
 
@@ -38,7 +37,7 @@ def housekeeping() -> Iterable[None]:
     Sample._mixins = ()
     Samples.merge._impls = samples_mergers
     Samples._mixins = ()
-    Samples.sample_class = Sample
+    Samples._sample_class = Sample
 
     # Remove the tests/site from the Python path
     sys.path.remove(str(Path(__file__).parent / "site"))

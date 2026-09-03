@@ -171,6 +171,100 @@ class Test_hooks(BaseTest):
             "samples.yaml": """
                 - id: a
                   files:
+                  - input/dummy.txt
+                - id: b
+                  files:
+                  - input/dummy.txt
+                - id: c
+                  files:
+                  - input/dummy.txt
+                - id: d
+                  files:
+                  - input/dummy.txt
+            """,
+            "input/dummy.txt": "INPUT_DUMMY",
+
+            "modules/a.py": """
+                from cellophane import pre_hook, post_hook, runner, Sample, Samples
+
+                FIELDS = ("a", "b", "c", "d", "e", "f")
+
+                class MySample(Sample):
+                    a: str = "DEFAULT"
+                    b: str = "DEFAULT"
+                    c: str = "DEFAULT"
+                    d: str = "DEFAULT"
+                    e: str = "DEFAULT"
+                    f: str = "DEFAULT"
+
+                class MySamples(Samples):
+                    a: str = "DEFAULT"
+                    b: str = "DEFAULT"
+                    c: str = "DEFAULT"
+                    d: str = "DEFAULT"
+                    e: str = "DEFAULT"
+                    f: str = "DEFAULT"
+
+                def merge(this, other):
+                    merged = "_".join(sorted({str(this), str(other)}))
+                    return f"MERGED_{merged}"
+
+                for field in FIELDS:
+                    Sample.merge.register(field)(merge)
+                    Samples.merge.register(field)(merge)
+
+                def factory(field, value):
+                    def hook(samples, logger, **_):
+                        setattr(samples, field, value)
+                        for sample in samples:
+                            setattr(sample, field, value)
+                        return samples
+                    return hook
+
+                per_session_pre = pre_hook(per="session")(factory("a", "PER_SESSION_PRE"))
+                per_runner_pre = pre_hook(per="runner")(factory("b", "PER_RUNNER_PRE"))
+                runner_a = runner()(factory("c", "RUNNER_A"))
+                runner_b = runner()(factory("c", "RUNNER_B"))
+                per_runner_post = post_hook(per="runner")(factory("d", "PER_RUNNER_POST"))
+                per_sample_post = post_hook(per="sample")(factory("e", "PER_SAMPLE_POST"))
+                per_session_post = post_hook(per="session")(factory("f", "PER_SESSION_POST"))
+
+                @post_hook(after="all")
+                def post_hook_results(samples, logger, **_):
+                    for field in FIELDS:
+                        logger.critical(f"SAMPLES FIELD {field}: {getattr(samples, field)}")
+                        for sample in samples:
+                            logger.critical(f"SAMPLE {sample.id} FIELD {field}: {getattr(sample, field)}")
+
+            """
+        }
+    )
+    def test_post_hook_per_runner(self, invocation: Invocation) -> None:
+        assert invocation.logs == literal(
+            "SAMPLES FIELD a: MERGED_PER_SESSION_PRE",
+            "SAMPLES FIELD b: MERGED_PER_RUNNER_PRE",
+            "SAMPLES FIELD c: MERGED_RUNNER_A_RUNNER_B",
+            "SAMPLES FIELD d: MERGED_PER_RUNNER_POST",
+            "SAMPLES FIELD e: PER_SAMPLE_POST",
+            "SAMPLES FIELD f: PER_SESSION_POST",
+            *(
+                line for s in ("a", "b", "c", "d") for line in (
+                    f"SAMPLE {s} FIELD a: MERGED_PER_SESSION_PRE",
+                    f"SAMPLE {s} FIELD b: MERGED_PER_RUNNER_PRE",
+                    f"SAMPLE {s} FIELD c: MERGED_RUNNER_A_RUNNER_B",
+                    f"SAMPLE {s} FIELD d: MERGED_PER_RUNNER_POST",
+                    f"SAMPLE {s} FIELD e: PER_SAMPLE_POST",
+                    f"SAMPLE {s} FIELD f: PER_SESSION_POST",
+                )
+            )
+        )
+
+    @mark.override(
+        args=[*args, "--samples_file samples.yaml"],
+        structure={
+            "samples.yaml": """
+                - id: a
+                  files:
                   - input/a.txt
                 - id: b
                   files:
@@ -522,7 +616,7 @@ class Test_hooks(BaseTest):
     def test_exception_hook_samples_merge(self, invocation: Invocation) -> None:
         assert invocation.logs == literal(
             'Unhandled exception when merging samples: Exception(\'DUMMY\')',
-            'Exception hook got exception: Exception(\'DUMMY\')'
+            'Exception hook got exception: MergeSamplesError("Unhandled exception when merging samples: Exception(\'DUMMY\')")'
         )
 
 
@@ -564,7 +658,7 @@ class Test_hooks(BaseTest):
     def test_exception_hook_cleaner_merge(self, invocation: Invocation) -> None:
         assert invocation.logs == literal(
             'Unhandled exception when merging cleaners: Exception(\'DUMMY\')',
-            'Exception hook got exception: Exception(\'DUMMY\')'
+            'Exception hook got exception: MergeCleanersError("Unhandled exception when merging cleaners: Exception(\'DUMMY\')")'
         )
 
     @mark.override(

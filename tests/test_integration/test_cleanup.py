@@ -161,7 +161,7 @@ class Test_cleanup(BaseTest):
 
                 @runner()
                 def runner(cleaner, workdir, **_):
-                    cleaner.calls.append(DeferredCall("DUMMY", workdir / "DUMMY"))
+                    cleaner.calls.add(DeferredCall("DUMMY", workdir / "DUMMY"))
             """,
         },
     )

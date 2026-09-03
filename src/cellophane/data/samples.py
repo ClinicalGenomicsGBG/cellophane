@@ -279,12 +279,11 @@ class Samples(UserList[S]):
             sample class.
 
     """
-
+    _mixins: ClassVar[tuple[type[Samples], ...]] = ()
     data: list[S] = field(factory=list)
     sample_class: ClassVar[type[Sample]] = Sample
     merge: ClassVar[Merger] = Merger()
     output: set[Output | OutputGlob] = field(factory=set, converter=set, on_setattr=convert)
-    _mixins: ClassVar[tuple[type["Samples"], ...]] = ()
 
     def __init__(self, data: list | None = None, /, **kwargs: Any) -> None:
         self.__attrs_init__(**kwargs)  # ty: ignore[unresolved-attribute]
@@ -351,7 +350,6 @@ class Samples(UserList[S]):
     def __ior__(self, other: Samples) -> Samples:
         if self.__class__.__name__ != other.__class__.__name__:
             raise MergeSamplesTypeError(f"Cannot merge {self.__class__} with {other.__class__}")
-
         for sample in other:
             self[sample.uuid] = sample
 
@@ -376,8 +374,9 @@ class Samples(UserList[S]):
         return self
 
     def __xor__(self, other: Samples) -> Samples:
-        """Replace all attributes and samples in 'self' with those from 'other', effectively
-        replacing 'self' with a copy of 'other'.
+        """Return a Samples object with samples from both self and other, without merging attributes.
+
+        Also update all fields in 'self' with those from 'other' (except for the 'data' field).
         """
         samples = deepcopy(self)
         samples ^= other
@@ -386,7 +385,10 @@ class Samples(UserList[S]):
     def __ixor__(self, other: Samples) -> Samples:
         if self.__class__.__name__ != other.__class__.__name__:
             raise MergeSamplesTypeError(f"Cannot merge {self.__class__} with {other.__class__}")
+        self |= other
         for field_ in fields_dict(self.__class__):
+            if field_ == "data":
+                continue
             other_ = getattr(other, field_)
             setattr(self, field_, other_)
         return self

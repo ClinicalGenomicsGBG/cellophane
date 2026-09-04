@@ -44,7 +44,7 @@ def _poolable(func: Callable) -> Callable:
     """
 
     @wraps(func)
-    def inner(log_queue: Queue, /, log_label: str, dispatcher: "Dispatcher", **kwargs: Any) -> object:
+    def inner(log_queue: Queue, /, log_label: str, dispatcher: Dispatcher, **kwargs: Any) -> object:
         handle_warnings()
         redirect_logging_to_queue(log_queue)
         dispatcher._log_queue = log_queue
@@ -186,7 +186,7 @@ def _run_pre_post_hooks(
     checkpoint_suffix: str | None = None,
     cleaner: Cleaner | DeferredCleaner,
     logger: LoggerAdapter,
-    dispatcher: "Dispatcher",
+    dispatcher: Dispatcher,
 ) -> tuple[Samples, Cleaner | DeferredCleaner]:
     for hook in [h for h in hooks if isinstance(h, (PreHook, PostHook)) and (h.when, h.per) == (when, per)]:
         try:
@@ -258,7 +258,7 @@ def _run_exception_hooks(
     log_queue: Queue,
     timestamp: Timestamp,
     logger: LoggerAdapter,
-    dispatcher: "Dispatcher",
+    dispatcher: Dispatcher,
 ) -> None:
     for hook in [h for h in hooks if isinstance(h, ExceptionHook)]:
         try:
@@ -293,7 +293,7 @@ def _start_runners(
     executor_cls: type[Executor],
     timestamp: Timestamp,
     cleaner: Cleaner,
-    dispatcher: "Dispatcher",
+    dispatcher: Dispatcher,
 ) -> Samples:
     """Start cellphane runners in parallel and collect the results.
 
@@ -398,7 +398,7 @@ def _start_runners(
             logger.critical("Received SIGINT, telling runners to shut down...")
             pool.terminate()
 
-        except BaseException as exc:  # pylint: disable=broad-except
+        except BaseException as exc:
             logger.critical(f"Unhandled exception when starting runners: {exc!r}", exc_info=exc)
             dispatcher.run_exception_hooks(exception=exc)
             pool.terminate()

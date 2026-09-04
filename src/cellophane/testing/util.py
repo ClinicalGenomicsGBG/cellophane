@@ -36,7 +36,7 @@ class PathDict(dict):
             return self[parent][child]
         return super().__getitem__(_key)
 
-    def update(self, other: dict | Iterable[tuple[Any, Any]], /, **kwargs: Any) -> None:
+    def update(self, other: dict | Iterable[tuple[Any, Any]], /, **kwargs: Any) -> None:  # ty: ignore[invalid-method-override]
         for key, value in (dict(other) | kwargs).items():
             self[key] = value
 
@@ -59,14 +59,14 @@ class regex:
                 case (str(p),):
                     self.patterns.append(re.compile(p, flags))
                 case re.Pattern:
-                    self.patterns.append(pattern)  # ty: ignore[invalid-argument-type]
+                    self.patterns.append(pattern)
                 case _:
                     raise ValueError(f"Invalid pattern {pattern}")
 
     def __contains__(self, other: str | bytes) -> bool:
         return self == other
 
-    def __eq__(self, other: str | Path | Iterable) -> bool:
+    def __eq__(self, other: str | Path | Iterable) -> bool:  # ty: ignore[invalid-method-override]
         if isinstance(other, Path):
             if not other.is_file():
                 raise ValueError("Path must be a file")
@@ -78,7 +78,7 @@ class regex:
 
         return all(pattern.search(other) is not None for pattern in self.patterns)
 
-    def __ne__(self, other: str | Path) -> bool:
+    def __ne__(self, other: str | Path) -> bool:  # ty: ignore[invalid-method-override]
         if isinstance(other, Path):
             if not other.is_file():
                 raise ValueError("Path must be a file")

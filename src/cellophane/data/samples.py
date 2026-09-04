@@ -80,7 +80,7 @@ def _reconstruct(
 
 
 @define(slots=False)
-class Sample:  # type: ignore[no-untyped-def]
+class Sample:
     """Base sample class represents a sample with an ID, a list of files, a flag indicating
     if it's done, and a list of Output objects.
     Can be subclassed in a module to add additional functionality (mixin).
@@ -376,8 +376,7 @@ class Samples(UserList[SAMPLE]):
             with suppress(StopIteration):
                 that_ = next(s for s in that if s.uuid == uuid)
             data.append(this_ & that_ if this_ and that_ else this_ or that_)  # ty: ignore[invalid-argument-type]
-            # arg-type can be ignored because uuid is guaranteed
-            # to be in at least one of the lists
+            # invalid-argument-type can be ignored because uuid is guaranteed to be in at least one of the lists
 
         return data
 
@@ -394,7 +393,7 @@ class Samples(UserList[SAMPLE]):
 
         try:
             for sample in yaml.load(path):
-                (samples.append(cls.sample_class(**sample)),)  # type: ignore[call-arg]
+                (samples.append(cls.sample_class(**sample)),)
             return cls(samples)
         except TypeError as exc:
             missing_fields = [

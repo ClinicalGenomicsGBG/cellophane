@@ -43,6 +43,14 @@ properties:
         type: size
         description: Ammount of memory to allocate to jobs started (if supported by the executor)
         default: 2 GB
+      os_env:
+        type: boolean
+        description: Inherit environment variables from the parent process (Can be overridden in calls to executor.submit)
+        default: false
+      env_vars:
+        type: mapping
+        description: Environment variables to set for all jobs submitted to the executor
+        default: {}
       environment:
         type: object
         properties:
@@ -79,6 +87,7 @@ properties:
               - emscripten-wasm32
               - wasi-wasm32
               - zos-z
+
 
   config_file:
     description: Path to config file

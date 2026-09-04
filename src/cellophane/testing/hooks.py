@@ -64,7 +64,7 @@ def pytest_runtest_makereport(item: Item, call: CallInfo) -> Iterable[TestReport
 
 def _is_regex(obj: Any) -> bool:
     # NOTE: We need to use this convoluted check because the class differs
-    # if it is imporeted using the deprecated location in `cellphane.src`
+    # if it is imported using the deprecated location in `cellphane.src`
     # This behavior should be removed when support for the deprecated
     # location is dropped
     cls = obj if isinstance(obj, type) else obj.__class__
@@ -76,7 +76,7 @@ def _is_regex(obj: Any) -> bool:
 
 def _is_literal(obj: Any) -> bool:
     # NOTE: We need to use this convoluted check because the class differs
-    # if it is imporeted using the deprecated location in `cellphane.src`
+    # if it is imported using the deprecated location in `cellphane.src`
     # This behavior should be removed when support for the deprecated
     # location is dropped
     cls = obj if isinstance(obj, type) else obj.__class__
@@ -88,7 +88,7 @@ def _is_literal(obj: Any) -> bool:
 
 def _is_regex_or_literal(obj: Any) -> bool:
     # NOTE: We need to use this convoluted check because the class differs
-    # if it is imporeted using the deprecated location in `cellphane.src`
+    # if it is imported using the deprecated location in `cellophane.src`
     # This behavior should be removed when support for the deprecated
     # location is dropped
     return _is_regex(obj) or _is_literal(obj)

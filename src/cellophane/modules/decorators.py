@@ -201,12 +201,12 @@ def post_hook(
 
     Args:
     ----
-        label (str | None): The label for the pre-hook. Defaults to None.
+        label (str | None): The label for the post-hook. Defaults to None.
         condition (Literal["always", "complete", "failed"] | SAMPLES_PREDICATE): The condition for
             the post-hook to execute.
             - "always": The post-hook will always execute.
-            - "complete": The post-hook will recieve only completed samples.
-            - "failed": The post-hook will recieve only failed samples.
+            - "complete": The post-hook will receive only completed samples.
+            - "failed": The post-hook will receive only failed samples.
             Defaults to "always".
         per (Literal["session", "sample", "runner"]): The level at which the hook
             will be executed.
@@ -215,9 +215,9 @@ def post_hook(
                 an individual sample.
             - "runner": The hook will be executed upon completion of a single runner.
         before (list[str] | Literal["all"] | None): List of post-hooks guaranteed to
-            execute after the resulting pre-hook. Defaults to an empty list.
-        after (list[str] | Literal["all"] | None): List of post-hooks guaratneed to
-            execute before the resulting pre-hook. Defaults to an empty list.
+            execute after the resulting post-hook. Defaults to an empty list.
+        after (list[str] | Literal["all"] | None): List of post-hooks guaranteed to
+            execute before the resulting post-hook. Defaults to an empty list.
 
     Returns:
     -------

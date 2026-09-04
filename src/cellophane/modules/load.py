@@ -84,7 +84,7 @@ def load(root: Path) -> MODULE_CONTENTS:
 
     Args:
     ----
-        path (Path): The path to the directory containing the modules.
+        root (Path): The path to the directory containing the modules.
 
     Returns:
     -------

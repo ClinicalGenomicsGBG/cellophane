@@ -55,12 +55,12 @@ class Flag:
     key: tuple[str, ...] = field(converter=_convert_tuple, on_setattr=setters.convert)
     type: SCHEMA_TYPES | None = field(default=None)
     items: dict | None = field(default=None)
-    min: int | None = field(
+    min: float | None = field(
         default=None,
         converter=_convert_float,
         on_setattr=setters.convert,
     )
-    max: int | None = field(
+    max: float | None = field(
         default=None,
         converter=_convert_float,
         on_setattr=setters.convert,

@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from cellophane.cleanup import Cleaner, DeferredCleaner
     from cellophane.executors import Executor
     from cellophane.util import NamedCallable, Timestamp
-    from cellophane.modules import SAMPLES_PREDICATE, EXCEPTION_PREDICATE
+    from cellophane.modules import SAMPLE_PREDICATE, EXCEPTION_PREDICATE
 
 
 class _AFTER_ALL: ...
@@ -36,7 +36,7 @@ class _BaseHook:
     label: str
     func: NamedCallable
     when: Literal["pre", "post", "exception"]
-    condition: Literal["always", "complete", "unprocessed", "failed"] | EXCEPTION_PREDICATE | SAMPLES_PREDICATE
+    condition: Literal["always", "complete", "unprocessed", "failed"] | EXCEPTION_PREDICATE | SAMPLE_PREDICATE
     before: DEPENDENCY_TYPE
     after: DEPENDENCY_TYPE
     per: Literal["session", "sample", "runner"] = "session"
@@ -46,7 +46,7 @@ class _BaseHook:
         func: NamedCallable,
         when: Literal["pre", "post", "exception"],
         label: str | None = None,
-        condition: Literal["always", "complete", "unprocessed", "failed"] | EXCEPTION_PREDICATE | SAMPLES_PREDICATE = "always",
+        condition: Literal["always", "complete", "unprocessed", "failed"] | EXCEPTION_PREDICATE | SAMPLE_PREDICATE = "always",
         before: str | DEPENDENCY_TYPE | None = None,
         after: str | DEPENDENCY_TYPE | None = None,
         per: Literal["session", "sample", "runner"] = "session",
@@ -131,7 +131,7 @@ class _PrePostHook(_BaseHook):
         func: NamedCallable,
         when: Literal["pre", "post"],
         label: str | None = None,
-        condition: Literal["always", "complete", "unprocessed", "failed"] | SAMPLES_PREDICATE = "always",
+        condition: Literal["always", "complete", "unprocessed", "failed"] | SAMPLE_PREDICATE = "always",
         before: str | DEPENDENCY_TYPE | None = None,
         after: str | DEPENDENCY_TYPE | None = None,
         per: Literal["session", "sample", "runner"] = "session",
@@ -190,7 +190,7 @@ class PreHook(_PrePostHook):
         self,
         func: NamedCallable,
         label: str | None = None,
-        condition: Literal["always", "unprocessed", "failed"] | SAMPLES_PREDICATE = "unprocessed",
+        condition: Literal["always", "unprocessed", "failed"] | SAMPLE_PREDICATE = "unprocessed",
         before: str | DEPENDENCY_TYPE | None = None,
         after: str | DEPENDENCY_TYPE | None = None,
         per: Literal["session", "sample", "runner"] = "session",
@@ -215,7 +215,7 @@ class PostHook(_PrePostHook):
         self,
         func: NamedCallable,
         label: str | None = None,
-        condition: Literal["always", "complete", "failed"] | SAMPLES_PREDICATE = "always",
+        condition: Literal["always", "complete", "failed"] | SAMPLE_PREDICATE = "always",
         before: str | DEPENDENCY_TYPE | None = None,
         after: str | DEPENDENCY_TYPE | None = None,
         per: Literal["session", "sample", "runner"] = "session",

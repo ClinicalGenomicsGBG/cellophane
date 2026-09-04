@@ -11,7 +11,7 @@ from .hook import (
 )
 from .load import load
 from .runner_ import Runner
-from .predicate import SAMPLES_PREDICATE, EXCEPTION_PREDICATE, select_samples
+from .predicate import SAMPLE_PREDICATE, EXCEPTION_PREDICATE, select_samples
 
 __all__ = [
     "ExceptionHook",
@@ -28,7 +28,7 @@ __all__ = [
     "exception_hook",
     "runner",
     "resolve_dependencies",
-    "SAMPLES_PREDICATE",
+    "SAMPLE_PREDICATE",
     "EXCEPTION_PREDICATE",
     "select_samples",
 ]

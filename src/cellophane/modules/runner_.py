@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
     from cellophane.cfg import Config
     from cellophane.executors import Executor
-    from cellophane.modules import Dispatcher, SAMPLES_PREDICATE, Runner
+    from cellophane.modules import Dispatcher, SAMPLE_PREDICATE, Runner
     from cellophane.util import Timestamp, NamedCallable
 
 def _resolve_outputs(
@@ -101,14 +101,14 @@ class Runner:
     split_by: str | Callable | None
     func: Callable
     main: NamedCallable[..., Samples | None]
-    condition: SAMPLES_PREDICATE | None
+    condition: SAMPLE_PREDICATE | None
 
     def __init__(
         self,
         func: NamedCallable,
         label: str | None = None,
         split_by: str | Callable | None = None,
-        condition: SAMPLES_PREDICATE | None = None,
+        condition: SAMPLE_PREDICATE | None = None,
     ) -> None:
         self.__name__ = func.__name__
         self.__qualname__ = func.__qualname__

@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from cellophane.data import Samples, Sample
     from cellophane.modules.hook import DEPENDENCY_TYPE
     from cellophane.util import NamedCallable
-    from cellophane.modules import SAMPLES_PREDICATE, EXCEPTION_PREDICATE
+    from cellophane.modules import SAMPLE_PREDICATE, EXCEPTION_PREDICATE
     from cellophane.cfg import Config
 
 
@@ -103,7 +103,7 @@ def _files_predicate(sample: Sample, samples: Samples, config: Config) -> bool:
 def runner(
     label: str | None = None,
     split_by: str | Callable | None = None,
-    condition: SAMPLES_PREDICATE | None = _files_predicate,
+    condition: SAMPLE_PREDICATE | None = _files_predicate,
 ) -> Callable:
     """Decorator for creating a runner.
 
@@ -112,7 +112,7 @@ def runner(
         label (str | None): The label for the runner. Defaults to None.
         split_by (str | Callable | None): The attribute to link samples by or a callable that determines the grouping
             of samples. Defaults to None.
-        condition (SAMPLES_PREDICATE | None): An optional predicate function to
+        condition (SAMPLE_PREDICATE | None): An optional predicate function to
             determine whether a sample should be processed by the runner.
 
     Returns:
@@ -139,7 +139,7 @@ def runner(
 
 def pre_hook(
     label: str | None = None,
-    condition: Literal["always", "unprocessed", "failed"] | SAMPLES_PREDICATE = "always",
+    condition: Literal["always", "unprocessed", "failed"] | SAMPLE_PREDICATE = "always",
     per: Literal["session", "runner"] = "session",
     before: str | DEPENDENCY_TYPE | None = None,
     after: str | DEPENDENCY_TYPE | None = None,
@@ -149,7 +149,7 @@ def pre_hook(
     Args:
     ----
         label (str | None): The label for the pre-hook. Defaults to None.
-        condition (Literal["always", "unprocessed", "failed"] | SAMPLES_PREDICATE): The condition for
+        condition (Literal["always", "unprocessed", "failed"] | SAMPLE_PREDICATE): The condition for
             the pre-hook to execute.
             - "always": The pre-hook will always execute.
             - "unprocessed": The pre-hook will receive only unprocessed samples.
@@ -192,7 +192,7 @@ def pre_hook(
 
 def post_hook(
     label: str | None = None,
-    condition: Literal["always", "complete", "failed"] | SAMPLES_PREDICATE = "always",
+    condition: Literal["always", "complete", "failed"] | SAMPLE_PREDICATE = "always",
     per: Literal["session", "sample", "runner"] = "session",
     before: str | DEPENDENCY_TYPE | None = None,
     after: str | DEPENDENCY_TYPE | None = None,
@@ -202,7 +202,7 @@ def post_hook(
     Args:
     ----
         label (str | None): The label for the post-hook. Defaults to None.
-        condition (Literal["always", "complete", "failed"] | SAMPLES_PREDICATE): The condition for
+        condition (Literal["always", "complete", "failed"] | SAMPLE_PREDICATE): The condition for
             the post-hook to execute.
             - "always": The post-hook will always execute.
             - "complete": The post-hook will receive only completed samples.

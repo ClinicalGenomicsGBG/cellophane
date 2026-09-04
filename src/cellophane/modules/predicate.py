@@ -1,28 +1,74 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol
+from collections.abc import Callable
 from copy import deepcopy
 from inspect import signature
+from typing import TYPE_CHECKING, Any, Protocol, TypeAlias, TypeVar, cast
 from warnings import warn
 
 if TYPE_CHECKING:
-    from cellophane.data import Sample, Samples
     from cellophane.cfg import Config
-    from typing import TypeVar
+    from cellophane.data import Sample, Samples
 
-    SAMPLE = TypeVar("SAMPLE", bound=Sample)
-    SAMPLES = TypeVar("SAMPLES", bound=Samples)
-
-
-class SAMPLES_PREDICATE(Protocol):
-    def __call__(self, /, sample: SAMPLE, samples: SAMPLES, config: Config) -> bool: ...
+SAMPLE = TypeVar("SAMPLE", bound="Sample")
+SAMPLES = TypeVar("SAMPLES", bound="Samples[Any]")
 
 
-class EXCEPTION_PREDICATE(Protocol):
-    def __call__(self, /, exception: BaseException, config: Config) -> bool: ...
+class _KW_NONE(Protocol):
+    def __call__(self) -> bool: ...
 
 
-def select_samples(samples: SAMPLES, config: Config, predicate: SAMPLES_PREDICATE, /) -> SAMPLES | None:
+class _KW_SAMPLE(Protocol[SAMPLE]):
+    def __call__(self, *, sample: SAMPLE) -> bool: ...
+
+
+class _KW_SAMPLES(Protocol[SAMPLES]):
+    def __call__(self, *, samples: SAMPLES) -> bool: ...
+
+
+class _KW_CONFIG(Protocol):
+    def __call__(self, *, config: Config) -> bool: ...
+
+
+class _KW_SAMPLE_SAMPLES(Protocol[SAMPLE, SAMPLES]):
+    def __call__(self, *, sample: SAMPLE, samples: SAMPLES) -> bool: ...
+
+
+class _KW_SAMPLE_CONFIG(Protocol[SAMPLE]):
+    def __call__(self, *, sample: SAMPLE, config: Config) -> bool: ...
+
+
+class _KW_SAMPLES_CONFIG(Protocol[SAMPLES]):
+    def __call__(self, *, samples: SAMPLES, config: Config) -> bool: ...
+
+
+class _KW_SAMPLE_SAMPLES_CONFIG(Protocol[SAMPLE, SAMPLES]):
+    def __call__(self, *, sample: SAMPLE, samples: SAMPLES, config: Config) -> bool: ...
+
+
+class _KW_EXCEPTION(Protocol):
+    def __call__(self, *, exception: BaseException) -> bool: ...
+
+
+class _KW_EXCEPTION_CONFIG(Protocol):
+    def __call__(self, *, exception: BaseException, config: Config) -> bool: ...
+
+
+SAMPLE_PREDICATE: TypeAlias = (
+    _KW_NONE
+    | _KW_SAMPLE[SAMPLE]
+    | _KW_SAMPLES[SAMPLES]
+    | _KW_CONFIG
+    | _KW_SAMPLE_SAMPLES[SAMPLE, SAMPLES]
+    | _KW_SAMPLE_CONFIG[SAMPLE]
+    | _KW_SAMPLES_CONFIG[SAMPLES]
+    | _KW_SAMPLE_SAMPLES_CONFIG[SAMPLE, SAMPLES]
+)
+
+EXCEPTION_PREDICATE: TypeAlias = _KW_NONE | _KW_EXCEPTION | _KW_EXCEPTION_CONFIG | _KW_CONFIG
+
+
+def select_samples(samples: SAMPLES, config: Config, predicate: SAMPLE_PREDICATE, /) -> SAMPLES | None:
     """
     Select samples from a collection based on a predicate function.
 
@@ -36,7 +82,7 @@ def select_samples(samples: SAMPLES, config: Config, predicate: SAMPLES_PREDICAT
     Args:
         samples (SAMPLES): The collection of samples to filter.
         config (Config): The configuration object.
-        predicate (SAMPLES_PREDICATE): The predicate function to apply.
+        predicate (SAMPLE_PREDICATE): The predicate function to apply.
 
     Returns:
         SAMPLES | None: The filtered collection of samples, or None if no samples match.
@@ -44,7 +90,6 @@ def select_samples(samples: SAMPLES, config: Config, predicate: SAMPLES_PREDICAT
     sig = signature(predicate)
     kwargs = {}
     name = getattr(predicate, "__qualname__", getattr(predicate, "__name__", repr(predicate)))
-
 
     if "config" in sig.parameters:
         kwargs["config"] = config
@@ -54,11 +99,13 @@ def select_samples(samples: SAMPLES, config: Config, predicate: SAMPLES_PREDICAT
         if "sample" not in sig.parameters:
             return samples if predicate(**kwargs) else None
         instance = deepcopy(samples)
+        predicate = cast(Callable[..., bool], predicate)
         instance.data = [sample for sample in samples if predicate(sample=sample, **kwargs)]
         return instance if instance else None
     except Exception as exc:
         warn(f"Predicate function '{name}' raised an exception: {exc!r}")
         return None
+
 
 def select_exception(exception: BaseException, config: Config, predicate: EXCEPTION_PREDICATE, /) -> bool:
     """

@@ -51,7 +51,7 @@ class Container(Mapping):
         for k, v in _data.items():
             self[k] = v
 
-    def __new__(cls, *args: Any, **kwargs: Any) -> "Container":
+    def __new__(cls, *args: Any, **kwargs: Any) -> Container:
         del args, kwargs  # unused
         instance = super().__new__(cls)
         object.__setattr__(instance, "__data__", {})

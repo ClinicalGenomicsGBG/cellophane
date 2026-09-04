@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
     from cellophane.cfg import Config
     from cellophane.executors import Executor
-    from cellophane.modules import Dispatcher, SAMPLES_PREDICATE
+    from cellophane.modules import Dispatcher, SAMPLES_PREDICATE, Runner
     from cellophane.util import Timestamp, NamedCallable
 
 def _resolve_outputs(
@@ -51,7 +51,7 @@ def _resolve_outputs(
 
 def _cleanup(
     *,
-    runner: "Runner",
+    runner: Runner,
     reason: BaseException,
     logger: LoggerAdapter,
     samples: Samples,

@@ -65,7 +65,7 @@ class ModulesRepo(Repo):
     """
 
     @classmethod
-    def from_url(cls, url: str, branch: str) -> "ModulesRepo":
+    def from_url(cls, url: str, branch: str) -> ModulesRepo:
         """Creates a `ModulesRepo` instance by cloning the repository from the specified
         URL.
 

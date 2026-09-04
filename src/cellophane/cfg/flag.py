@@ -191,7 +191,7 @@ class Flag:
             show_default=(
                 (self.secret or default is UNSET)
                 or (
-                    type_.invert(default)  # type: ignore[arg-type]
+                    type_.invert(default)  # nofmt
                     if default and isinstance(type_, InvertibleParamType)
                     else str(default)
                 )

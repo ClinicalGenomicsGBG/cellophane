@@ -53,9 +53,7 @@ def pytest_runtest_makereport(item: Item, call: CallInfo) -> Iterable[TestReport
     """Hook to add commandline, logs and output to test reports."""
     del call  # Unused
 
-    # NOTE: This syntax is a bit esoteric, and mypy doesn't like it
-    # but this is paraphrased from the pytest docs
-    report: TestReport = yield  # type: ignore[misc, assignment]
+    report: TestReport = yield
     if invocation_ := item.funcargs.get("invocation"):  # ty: ignore[unresolved-attribute]
         _traceback = "".join(format_exception(invocation_.exception))
         report.sections.append(("Args", " ".join(invocation_.args)))

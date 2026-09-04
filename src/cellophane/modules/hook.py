@@ -103,7 +103,7 @@ class _BaseHook:
     ) -> Any:
         logger = LoggerAdapter(getLogger(), {"label": self.label})
         logger.debug(f"Running {self.label} hook")
-        _workdir = config.workdir / config.tag  # ty: ignore[unsupported-operator]
+        _workdir = config.workdir / config.tag
         with executor_cls(
             config=config,
             log_queue=log_queue,
@@ -146,7 +146,7 @@ class _PrePostHook(_BaseHook):
             per=per,
         )
 
-    def __call__(  # type: ignore[override]
+    def __call__(
         self,
         samples: Samples,
         config: Config,
@@ -157,7 +157,7 @@ class _PrePostHook(_BaseHook):
         cleaner: Cleaner | DeferredCleaner,
         checkpoints: Checkpoints,
         dispatcher: Any,
-    ) -> Samples:
+    ) -> Samples:  # ty: ignore[invalid-method-override]
         logger = LoggerAdapter(getLogger(), {"label": self.label})
         match super().__call__(
             samples=samples,
@@ -255,7 +255,7 @@ class ExceptionHook(_BaseHook):
             per="session",
         )
 
-    def __call__(  # type: ignore[override]
+    def __call__(
         self,
         exception: BaseException,
         config: Config,
@@ -264,7 +264,7 @@ class ExceptionHook(_BaseHook):
         log_queue: Queue,
         timestamp: Timestamp,
         dispatcher: Any,
-    ) -> Any:
+    ) -> Any:  # ty: ignore[invalid-method-override]
         super().__call__(
             exception=exception,
             config=config,

@@ -398,7 +398,7 @@ def _start_runners(
             logger.critical("Received SIGINT, telling runners to shut down...")
             pool.terminate()
 
-        except BaseException as exc:  # pylint: disable=broad-except
+        except BaseException as exc:
             logger.critical(f"Unhandled exception when starting runners: {exc!r}", exc_info=exc)
             dispatcher.run_exception_hooks(exception=exc)
             pool.terminate()

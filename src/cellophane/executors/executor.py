@@ -116,7 +116,7 @@ class Executor:
                         logger.debug(f"Completed {executor_name} job '{job_name}' (UUID={uuid.hex[:8]})")
                 if fn is not None:
                     fn(result_or_exception)
-            except Exception as exc:  # pylint: disable=broad-except
+            except Exception as exc:
                 logger.error(
                     f"Unhandled exception in callback of {executor_name} job '{job_name}' (UUID={uuid.hex[:8]}): {exc!r}",
                     exc_info=exc,
@@ -213,7 +213,7 @@ class Executor:
                     category=DeprecationWarning,
                 )
 
-            self.target(*_args, **kwargs)  # type: ignore[arg-type]
+            self.target(*_args, **kwargs)
         except InterruptWorker as exc:
             logger.debug(f"Terminating {self.name} job '{name}' (UUID={uuid.hex[:8]})")
             code = self.terminate_hook(uuid, logger)
@@ -223,7 +223,7 @@ class Executor:
                 logger.warning(f"Non-zero exit code ({exc.code}) for {self.name} job '{name}' (UUID={uuid.hex[:8]})")
                 self.terminate_hook(uuid, logger)
                 raise exc
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:
             logger.warning(f"Unhandled exception in {self.name} job '{name}' (UUID={uuid.hex[:8]}): {exc!r}", exc_info=exc)
             self.terminate_hook(uuid, logger)
             raise SystemExit(1) from exc

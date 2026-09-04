@@ -4,9 +4,10 @@ from __future__ import annotations
 import time
 from importlib.metadata import version
 from importlib.util import find_spec
+from importlib.machinery import ModuleSpec
 from logging import LoggerAdapter, getLogger
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from humanfriendly import format_timespan
 from rich_click import rich_click
@@ -34,8 +35,8 @@ if TYPE_CHECKING:
     from cellophane.cfg import Config
 
 
-spec = find_spec("cellophane")
-CELLOPHANE_ROOT = Path(spec.origin).parent  # type: ignore[union-attr, arg-type]
+spec = cast(ModuleSpec, find_spec("cellophane"))
+CELLOPHANE_ROOT = Path(cast(str, spec.origin)).parent
 CELLOPHANE_VERSION = version("cellophane")
 
 
@@ -123,7 +124,7 @@ def cellophane(label: str, root: Path) -> Command:
             executors.EXECUTOR = executor_cls
             logger.debug(f"Using {executor_cls.name} executor")
 
-            config.analysis = label  # type: ignore[attr-defined]
+            config.analysis = label
             dispatcher = Dispatcher(
                 hooks=hooks,
                 runners=runners,

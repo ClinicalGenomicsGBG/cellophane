@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from cellophane.cfg import Config
     from cellophane.executors import Executor
     from cellophane.modules import Dispatcher, SAMPLES_PREDICATE
-    from cellophane.util import Timestamp
+    from cellophane.util import Timestamp, NamedCallable
 
 def _resolve_outputs(
     samples: Samples,
@@ -44,7 +44,7 @@ def _resolve_outputs(
                 config=config,
                 timestamp=timestamp,
             )
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:
             logger.warning(f"Failed to resolve output {output_}: {exc!r}")
             logger.debug(exc, exc_info=True)
 
@@ -100,20 +100,20 @@ class Runner:
     label: str
     split_by: str | Callable | None
     func: Callable
-    main: Callable[..., Samples | None]
+    main: NamedCallable[..., Samples | None]
     condition: SAMPLES_PREDICATE | None
 
     def __init__(
         self,
-        func: Callable,
+        func: NamedCallable,
         label: str | None = None,
         split_by: str | Callable | None = None,
         condition: SAMPLES_PREDICATE | None = None,
     ) -> None:
-        self.__name__ = func.__name__  # type: ignore[attr-defined]
-        self.__qualname__ = func.__qualname__  # type: ignore[attr-defined]
-        self.name = func.__name__  # type: ignore[attr-defined]
-        self.label = label or func.__name__  # type: ignore[attr-defined]
+        self.__name__ = func.__name__
+        self.__qualname__ = func.__qualname__
+        self.name = func.__name__
+        self.label = label or func.__name__
         self.main = staticmethod(func)
         self.label = label or self.__name__
         self.split_by = split_by

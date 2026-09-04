@@ -38,21 +38,16 @@ class Container(Mapping):
 
     __data__: dict = field(factory=dict)
 
-    def __or__(self, other: "Container") -> "Container":
+    def __or__(self, other: Container) -> Container:
         if self.__class__ != other.__class__:
             raise TypeError("Cannot merge containers of different types")
         return self.__class__(**merge_mappings(self, other))
 
-    def __init__(  # pylint: disable=keyword-arg-before-vararg
-        self,
-        __data__: dict | None = None,
-        *args: Any,
-        **kwargs: Any,
-    ) -> None:
+    def __init__(self, __data__: dict | None = None, *args: Any, **kwargs: Any) -> None:
         _data = __data__ or {}
         for key in [k for k in kwargs if k not in fields_dict(self.__class__)]:
             _data[key] = kwargs.pop(key)
-        self.__attrs_init__(*args, **kwargs)  # ty: ignore[call-non-callable]
+        self.__attrs_init__(*args, **kwargs)
         for k, v in _data.items():
             self[k] = v
 
@@ -62,7 +57,7 @@ class Container(Mapping):
         object.__setattr__(instance, "__data__", {})
         return instance
 
-    def __contains__(self, key: str | Sequence[str]) -> bool:
+    def __contains__(self, key: str | Sequence[str]) -> bool:  # ty: ignore[invalid-method-override]
         try:
             self[key]
             return True

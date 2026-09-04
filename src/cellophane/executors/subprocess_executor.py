@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 import shlex
-import subprocess as sp  # nosec
+import subprocess as sp
 from typing import TYPE_CHECKING
 
 import psutil
@@ -40,7 +40,7 @@ class SubprocessExecutor(Executor, name="subprocess"):
     ) -> None:
         """Execute a command."""
         del kwargs  # Unused
-        logdir = self.config.logdir / "subprocess"  # ty: ignore[unsupported-operator]
+        logdir = self.config.logdir / "subprocess"
         logdir.mkdir(parents=True, exist_ok=True)
 
         with (

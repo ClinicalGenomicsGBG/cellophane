@@ -1,6 +1,5 @@
 """Tests for the data module."""
 
-# pylint: disable=pointless-statement
 from copy import deepcopy
 from pathlib import Path
 from typing import ClassVar
@@ -19,7 +18,7 @@ class Dummy(data.Container):
     a: int = field(default=1337)
     x: data.Container | None = field(default=None)
 
-    @a.validator
+    @a.validator  # ty: ignore[unresolved-attribute]
     def _validate_a(self, attribute: str, value: int) -> None:
         if isinstance(value, int) and value > 9000:
             raise ValueError("It's over 9000!")
@@ -61,7 +60,7 @@ class Test_Container:
 
     @staticmethod
     def test_deepcopy() -> None:
-        _dummy = Dummy(a={"b": 1338})  # type: ignore[call-arg]
+        _dummy = Dummy(a={"b": 1338})
         _dummy_ref = _dummy
         _dummy_copy = deepcopy(_dummy)
 
@@ -115,7 +114,7 @@ class Test_Sample:
     @staticmethod
     def test_setitem() -> None:
         @define
-        class _SampleSub(data.Sample):  # type: ignore[no-untyped-def]
+        class _SampleSub(data.Sample):
             a: int = 1337
 
         _sample = _SampleSub(id="a", files=["b"])
@@ -151,7 +150,7 @@ class Test_Sample:
     @staticmethod
     def test_with_mixins() -> None:
         @define(slots=False)
-        class _mixin(data.Sample):  # type: ignore[no-untyped-def]
+        class _mixin(data.Sample):
             a: str = "Hello"
             b: str = field(default="World")
             c: int = 1337
@@ -171,8 +170,7 @@ class Test_Sample:
     @staticmethod
     def test_slotted_mixin() -> None:
         @define(slots=True)
-        # FIXME: What triggers this mypy error?
-        class _mixin(data.Sample):  # type: ignore[no-untyped-def]
+        class _mixin(data.Sample):
             a: str = "Hello"
 
         with raises(TypeError):
@@ -281,9 +279,7 @@ class Test_Samples:
             c: int = 1337
             d: ClassVar[int] = 1338
 
-        _samples_class: type[_mixin] = data.Samples.with_mixins(
-            [_mixin],  # type: ignore[assignment]
-        )
+        _samples_class = data.Samples.with_mixins([_mixin])
         assert _samples_class is not data.Samples
         assert _samples_class.d == 1338
 
@@ -307,7 +303,7 @@ class Test_Samples:
                 data.Sample(id="b", files=["c", "d"]),
             ],
         )
-        assert samples[samples[0].uuid] == samples[0]  # pylint: disable=no-member
+        assert samples[samples[0].uuid] == samples[0]
 
         sample_c = data.Sample(id="c", files=["e", "f"])
         with raises(KeyError):

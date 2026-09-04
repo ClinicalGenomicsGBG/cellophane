@@ -6,14 +6,17 @@ from cellophane.data import OutputGlob
 
 from .hook import ExceptionHook, PostHook, PreHook
 from .runner_ import Runner
+from warnings import warn
 
 if TYPE_CHECKING:
     from pathlib import Path
     from typing import Any, Callable, Literal
 
-    from cellophane.data import Samples
+    from cellophane.data import Samples, Sample
     from cellophane.modules.hook import DEPENDENCY_TYPE
     from cellophane.util import NamedCallable
+    from cellophane.modules import SAMPLE_PREDICATE, EXCEPTION_PREDICATE
+    from cellophane.cfg import Config
 
 
 def output(
@@ -81,17 +84,36 @@ def output(
 
     return wrapper
 
+def _files_predicate(sample: Sample, samples: Samples, config: Config) -> bool:
+    warn(
+        "Skipping and failing samples with no files is deprecated and will be removed in a future cellophane version. "
+        "If you rely on this behavior, please implement a custom runner predicate and fail samples in a pre-hook.",
+        category=DeprecationWarning,
+    )
+    if sample.files:
+        return True
+    else:
+        # NOTE: Mutating samples in a predicate is not recommended, but we will do it here for backwards compatibility.
+        # If you want to emulate this behavior after this is removed, you can implement a pre-hook that fails samples
+        # with no files instead.
+        warn(f"Sample {sample} will be skipped as it has no files")
+        sample.fail("Missing files")
+        return False
 
 def runner(
     label: str | None = None,
-    split_by: str | None = None,
+    split_by: str | Callable | None = None,
+    condition: SAMPLE_PREDICATE | None = _files_predicate,
 ) -> Callable:
     """Decorator for creating a runner.
 
     Args:
     ----
         label (str | None): The label for the runner. Defaults to None.
-        split_by (str | None): The attribute to link samples by. Defaults to None.
+        split_by (str | Callable | None): The attribute to link samples by or a callable that determines the grouping
+            of samples. Defaults to None.
+        condition (SAMPLE_PREDICATE | None): An optional predicate function to
+            determine whether a sample should be processed by the runner.
 
     Returns:
     -------
@@ -100,10 +122,16 @@ def runner(
     """
 
     def wrapper(func: NamedCallable) -> Runner:
+        if condition is not None and not callable(condition):
+            raise ValueError(
+                f"Invalid condition for runner: '{condition}'. "
+                "Must be a callable predicate or None."
+            )
         return Runner(
             label=label,
             func=func,
             split_by=split_by,
+            condition=condition,
         )
 
     return wrapper
@@ -111,7 +139,7 @@ def runner(
 
 def pre_hook(
     label: str | None = None,
-    condition: Literal["always", "unprocessed", "failed"] = "always",
+    condition: Literal["always", "unprocessed", "failed"] | SAMPLE_PREDICATE = "always",
     per: Literal["session", "runner"] = "session",
     before: str | DEPENDENCY_TYPE | None = None,
     after: str | DEPENDENCY_TYPE | None = None,
@@ -121,6 +149,19 @@ def pre_hook(
     Args:
     ----
         label (str | None): The label for the pre-hook. Defaults to None.
+        condition (Literal["always", "unprocessed", "failed"] | SAMPLE_PREDICATE): The condition for
+            the pre-hook to execute.
+            - "always": The pre-hook will always execute.
+            - "unprocessed": The pre-hook will receive only unprocessed samples.
+            - "failed": The pre-hook will receive only failed samples.
+            - Or a custom predicate function that takes a sample, the samples, and the config,
+                and returns True if the sample should be processed by the pre-hook.
+            Defaults to "always".
+        per (Literal["session", "runner"]): The level at which the hook
+            will be executed.
+            - "session": The hook will be executed before any runners are executed.
+            - "runner": The hook will be executed before each runner is executed.
+            Defaults to "session".
         before (list[str] | Literal["all"] | None): List of pre-hooks guaranteed to
             execute after the resulting pre-hook. Defaults to an empty list.
         after (list[str] | Literal["all"] | None): List of pre-hooks guaratneed to
@@ -131,7 +172,11 @@ def pre_hook(
         Callable: The decorator function.
 
     """
-
+    if condition not in ("always", "unprocessed", "failed") and not callable(condition):
+        raise ValueError(
+            f"Invalid condition for pre-hook: '{condition}'. "
+            "Must be one of 'always', 'unprocessed', 'failed', or a callable predicate."
+        )
     def wrapper(func: NamedCallable) -> PreHook:
         return PreHook(
             label=label,
@@ -147,7 +192,7 @@ def pre_hook(
 
 def post_hook(
     label: str | None = None,
-    condition: Literal["always", "complete", "failed"] = "always",
+    condition: Literal["always", "complete", "failed"] | SAMPLE_PREDICATE = "always",
     per: Literal["session", "sample", "runner"] = "session",
     before: str | DEPENDENCY_TYPE | None = None,
     after: str | DEPENDENCY_TYPE | None = None,
@@ -156,12 +201,12 @@ def post_hook(
 
     Args:
     ----
-        label (str | None): The label for the pre-hook. Defaults to None.
-        condition (Literal["always", "complete", "failed"]): The condition for
+        label (str | None): The label for the post-hook. Defaults to None.
+        condition (Literal["always", "complete", "failed"] | SAMPLE_PREDICATE): The condition for
             the post-hook to execute.
             - "always": The post-hook will always execute.
-            - "complete": The post-hook will recieve only completed samples.
-            - "failed": The post-hook will recieve only failed samples.
+            - "complete": The post-hook will receive only completed samples.
+            - "failed": The post-hook will receive only failed samples.
             Defaults to "always".
         per (Literal["session", "sample", "runner"]): The level at which the hook
             will be executed.
@@ -170,18 +215,20 @@ def post_hook(
                 an individual sample.
             - "runner": The hook will be executed upon completion of a single runner.
         before (list[str] | Literal["all"] | None): List of post-hooks guaranteed to
-            execute after the resulting pre-hook. Defaults to an empty list.
-        after (list[str] | Literal["all"] | None): List of post-hooks guaratneed to
-            execute before the resulting pre-hook. Defaults to an empty list.
+            execute after the resulting post-hook. Defaults to an empty list.
+        after (list[str] | Literal["all"] | None): List of post-hooks guaranteed to
+            execute before the resulting post-hook. Defaults to an empty list.
 
     Returns:
     -------
         Callable: The decorator function.
 
     """
-    if condition not in ["always", "complete", "failed"]:
-        raise ValueError(f"{condition=} must be one of 'always', 'complete', 'failed'")
-
+    if condition not in ("always", "complete", "failed") and not callable(condition):
+        raise ValueError(
+            f"Invalid condition for post-hook: '{condition}'. "
+            "Must be one of 'always', 'complete', 'failed', or a callable predicate."
+        )
     def wrapper(func: NamedCallable) -> PostHook:
         return PostHook(
             label=label,
@@ -198,6 +245,7 @@ def exception_hook(
     label: str | None = None,
     before: str | DEPENDENCY_TYPE | None = None,
     after: str | DEPENDENCY_TYPE | None = None,
+    condition: EXCEPTION_PREDICATE | None = None,
 ) -> Callable:
     """Decorator for creating an exception hook.
 
@@ -210,12 +258,19 @@ def exception_hook(
             execute after the resulting exception hook. Defaults to an empty list.
         after (list[str] | Literal["all"] | None): List of exception hooks guaranteed to
             execute before the resulting exception hook. Defaults to an empty list.
+        condition (Callable[[Exception], bool] | None): An optional predicate function
+            to determine whether an exception should be processed by the hook.
 
     Returns:
     -------
         Callable: The decorator function.
 
     """
+    if condition is not None and not callable(condition):
+        raise ValueError(
+            f"Invalid condition for exception hook: '{condition}'. "
+            "Must be a callable predicate or None."
+        )
 
     def wrapper(func: NamedCallable) -> ExceptionHook:
         return ExceptionHook(
@@ -223,6 +278,7 @@ def exception_hook(
             func=func,
             before=before,
             after=after,
+            condition=condition,
         )
 
     return wrapper

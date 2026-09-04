@@ -147,3 +147,34 @@ class Test_module_load(BaseTest):
     def test_module_add_log_handler(self, invocation: Invocation) -> None:
         assert "SHOULD BE SUPPRESSED" not in invocation.logs
         assert invocation.exit_code == 0
+
+
+    @mark.override(
+        args=[*args, "--samples_file", "samples.yml"],
+        structure={
+            "samples.yml": """
+            - id: a
+            """,
+
+            "modules/dummy_a.py": """
+            from cellophane import Sample
+
+            class SampleA(Sample): ...
+            """,
+
+            "modules/dummy_b.py": """
+            from .dummy_a import SampleA
+            """,
+
+            "modules/test.py": """
+            from cellophane import runner
+
+            @runner(condition=None)
+            def test_runner(logger, **_):
+                logger.info("RUNNER EXECUTED")
+            """,
+        }
+    )
+    def test_cross_module_import(self, invocation: Invocation) -> None:
+        assert invocation.logs == literal("RUNNER EXECUTED")
+        assert invocation.exit_code == 0

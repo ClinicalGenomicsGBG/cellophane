@@ -112,7 +112,7 @@ class StringMapping(InvertibleParamType):
     """
 
     name = "mapping"
-    scanner = re.Scanner(  # type: ignore[attr-defined]
+    scanner = re.Scanner(  # ty: ignore[unresolved-attribute]
         [
             (r'"[^"]*"', lambda _, token: token[1:-1]),
             (r"'[^']*'", lambda _, token: token[1:-1]),
@@ -174,7 +174,7 @@ class StringMapping(InvertibleParamType):
             if extra or len(tokens) % 2 != 0:
                 raise ValueError
             parsed = PreservedDict(zip(tokens[::2], tokens[1::2]))
-        except Exception:  # pylint: disable=broad-except
+        except Exception:
             if not fail:
                 raise
             self.fail(f"Expected a mapping (a=b,x=y), got {value}", param, ctx)
@@ -249,7 +249,7 @@ class TypedArray(InvertibleParamType):
     """
 
     name = "array"
-    scanner = re.Scanner(  # type: ignore[attr-defined]
+    scanner = re.Scanner(  # ty: ignore[unresolved-attribute]
         [
             (r'"[^"]*"', lambda _, token: token),
             (r"'[^']*'", lambda _, token: token),
@@ -268,7 +268,7 @@ class TypedArray(InvertibleParamType):
         ]:
             raise ValueError(f"Invalid type: {items_type}")
 
-    def convert(  # type: ignore[override]
+    def convert(
         self,
         value: Any,
         param: click.Parameter | None,
@@ -316,11 +316,11 @@ class TypedArray(InvertibleParamType):
             else:
                 parsed = [value]
 
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:
             self.fail(str(exc), param, ctx)
 
         if not self.items.get("type"):
-            return parsed  # ty: ignore[invalid-return-type]
+            return parsed
 
         items_click_type: Callable = click_type(
             self.items.get("type", "string"),
@@ -337,9 +337,8 @@ class TypedArray(InvertibleParamType):
             else items_click_type
         )
         try:
-            # NOTE: Mypy thinks that `converter` is not callable
-            return [converter(v) for v in parsed]  # type: ignore[operator]
-        except Exception as exc:  # pylint: disable=broad-except
+            return [converter(v) for v in parsed]
+        except Exception as exc:
             self.fail(f"Unable to convert value: {exc}", param, ctx)
 
     def invert(self, value: list) -> str:
@@ -408,7 +407,7 @@ class ParsedSize(InvertibleParamType):
         """
         try:
             return parse_size(str(value))
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:
             self.fail(str(exc), param, ctx)
 
     def invert(self, value: int) -> str:
@@ -481,7 +480,7 @@ class FormattedString(click.ParamType):
                 raise FormatError(f"'{value}' does not match pattern '{self.pattern}'")
         except FormatError as exc:
             self.fail(exc.message, param, ctx)
-        except Exception as exc:  # pylint: disable=broad-except
+        except Exception as exc:
             # FIXME: Are any values not coercible to string?
             self.fail(f"Unable to convert '{value}' to string: {exc!r}", param, ctx)
         return _value
@@ -510,7 +509,7 @@ class ResilientIntRange(click.IntRange):
         return super().convert(value, param, ctx)
 
 
-def click_type(  # type: ignore[return]
+def click_type(
     type_: SCHEMA_TYPES | None = None,
     enum: list | None = None,
     items: dict | None = None,

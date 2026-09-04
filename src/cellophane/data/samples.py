@@ -1,14 +1,17 @@
 """Sample and Samples class definitions."""
+
 from __future__ import annotations
 
 from collections import UserList
 from contextlib import suppress
 from copy import deepcopy
+from inspect import signature
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, TypeVar, overload
+from typing import TYPE_CHECKING, Any, ClassVar, TypeVar, cast, overload
 from uuid import UUID, uuid4
+from warnings import warn
 
-from attrs import define, field, fields_dict, make_class
+from attrs import NOTHING, define, field, fields, fields_dict, make_class
 from attrs.setters import convert, frozen
 from ruamel.yaml import YAML
 
@@ -18,37 +21,24 @@ from .merger import Merger
 from .util import convert_path_list
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from typing import Any, Iterable, Literal, Sequence
 
     from cellophane.data import Output, OutputGlob
 
-S = TypeVar("S", bound="Sample")
-
-@overload
-def _apply_mixins(
-    cls: type["Samples"],
-    mixins: Sequence[type["Samples"]],
-    **kwargs: Any,
-) -> type["Samples"]:
-    pass  # pragma: no cover
-    # Excluded from coverage because this overload is only used internally
+SAMPLE = TypeVar("SAMPLE", bound="Sample")
+SAMPLES = TypeVar("SAMPLES", bound="Samples")
+SAMPLE_OR_SAMPLES = TypeVar("SAMPLE_OR_SAMPLES", "Sample", "Samples")
 
 
-@overload
-def _apply_mixins(
-    cls: type["Sample"],
-    mixins: Sequence[type["Sample"]],
-    **kwargs: Any,
-) -> type["Sample"]:
-    pass  # pragma: no cover
-    # Excluded from coverage because this overload is only used internally
+class SplitFunctionError(Exception): ...
 
 
 def _apply_mixins(
-    cls: type,
-    mixins: Sequence[type],
+    cls: type[SAMPLE_OR_SAMPLES],
+    mixins: Sequence[type[SAMPLE_OR_SAMPLES]],
     **kwargs: Any,
-) -> type:
+) -> type[SAMPLE_OR_SAMPLES]:
     name_ = cls.__name__
     if not mixins:
         return cls
@@ -63,56 +53,34 @@ def _apply_mixins(
         name_ += f"_{mixin.__name__}"
         if "__attrs_attrs__" not in mixin.__dict__:
             mixin = define(mixin, slots=False)
-        if cls not in mixin.__bases__:  # ty: ignore[possibly-missing-attribute]
-            mixin.__bases__ = (cls,)  # ty: ignore[invalid-assignment]
+        if cls not in cast(type, mixin).__bases__:
+            cast(type, mixin).__bases__ = (cls,)
 
         mixins_.append(mixin)
 
-    cls_ = make_class(name_, (), (*mixins_,), slots=False)
-    cls_._mixins = (*mixins,)  # ty: ignore[unresolved-attribute]
+    cls_ = cast(type[SAMPLE_OR_SAMPLES], make_class(name_, (), (*mixins_,), slots=False))
+    cls_._mixins = (*mixins_,)
     for k, v in kwargs.items():
         setattr(cls_, k, v)
     return cls_
 
 
-@overload
 def _reconstruct(
-    cls: type["Samples"],
-    mixins: Sequence[type["Samples"]],
+    cls: type[SAMPLE_OR_SAMPLES],
+    mixins: Sequence[type[SAMPLE_OR_SAMPLES]],
     args: tuple[Any, ...],
     kwargs: dict[str, Any],
     state: dict[str, Any],
     cls_kwargs: dict[str, Any] | None = None,
-) -> "Samples": ...
-
-
-@overload
-def _reconstruct(
-    cls: type["Sample"],
-    mixins: Sequence[type["Sample"]],
-    args: tuple[Any, ...],
-    kwargs: dict[str, Any],
-    state: dict[str, Any],
-    cls_kwargs: dict[str, Any] | None = None,
-) -> "Sample": ...
-
-
-def _reconstruct(
-    cls: type,
-    mixins: Sequence[type],
-    args: tuple[Any, ...],
-    kwargs: dict[str, Any],
-    state: dict[str, Any],
-    cls_kwargs: dict[str, Any] | None = None,
-) -> Sample | Samples:
+) -> SAMPLE_OR_SAMPLES:
     cls_ = _apply_mixins(cls, mixins, **(cls_kwargs or {}))
     instance = cls_(*args, **kwargs)
-    instance.__setstate__(state)
+    cast(Sample | Samples, instance).__setstate__(state)
     return instance
 
 
 @define(slots=False)
-class Sample:  # type: ignore[no-untyped-def]
+class Sample:
     """Base sample class represents a sample with an ID, a list of files, a flag indicating
     if it's done, and a list of Output objects.
     Can be subclassed in a module to add additional functionality (mixin).
@@ -155,7 +123,7 @@ class Sample:  # type: ignore[no-untyped-def]
     )
     _fail: str | None = field(default=None, repr=False)
     merge: ClassVar[Merger] = Merger()
-    _mixins: ClassVar[tuple[type["Sample"], ...]] = ()
+    _mixins: ClassVar[tuple[type[Sample], ...]] = ()
 
     def __str__(self) -> str:
         return self.id
@@ -179,7 +147,11 @@ class Sample:  # type: ignore[no-untyped-def]
     def __reduce__(self) -> str | tuple[Any, ...]:
         state = self.__getstate__()
         args = ()
-        kwargs = {"id": state.pop("id")}
+        kwargs = {
+            name: state.pop(name)  # nofmt
+            for name, attribute in fields_dict(self.__class__).items()
+            if attribute.kw_only
+        }
         return (_reconstruct, (Sample, self._mixins, args, kwargs, state))
 
     def __and__(self, other: "Sample") -> "Sample":
@@ -231,7 +203,7 @@ class Sample:  # type: ignore[no-untyped-def]
         return self._fail or False
 
     @classmethod
-    def with_mixins(cls, mixins: Sequence[type["Sample"]]) -> type["Sample"]:
+    def with_mixins(cls, mixins: Sequence[type[SAMPLE]]) -> type[SAMPLE]:
         """Returns a new Sample class with the specified mixins as base classes.
 
         Internally called by Cellophane with the samples mixins specified
@@ -240,24 +212,35 @@ class Sample:  # type: ignore[no-untyped-def]
 
         Args:
         ----
-            cls (type): The class to apply the mixins to.
-            mixins (Iterable[type]): An iterable of mixin classes to apply.
+            cls (type[SAMPLE]): The class to apply the mixins to.
+            mixins (Sequence[type[SAMPLE]]): A sequence of mixin classes to apply.
 
         Returns:
         -------
-            type: The new class with the mixins applied.
+            type[SAMPLE]: The new class with the mixins applied.
 
         """
-        return _apply_mixins(cls, mixins)
+        return cast(type[SAMPLE], _apply_mixins(cls, mixins))
+
+
+class _SampleClassDescriptor:
+    @overload
+    def __get__(self, instance: None, owner: type[Samples[SAMPLE]]) -> type[SAMPLE]: ...
+    @overload
+    def __get__(self, instance: Samples[SAMPLE], owner: Any = None) -> type[SAMPLE]: ...
+    def __get__(self, instance: Any, owner: Any = None) -> Any:
+        cls = owner if instance is None else type(instance)
+        return cls._sample_class
+
 
 @define(slots=False, order=False, init=False)
-class Samples(UserList[S]):
+class Samples(UserList[SAMPLE]):
     """Base samples class represents a list of samples.
     Can be subclassed in a module to add additional functionality (mixin).
 
     Attributes
     ----------
-        data (list[Sample]): The list of samples.
+        data (list[SAMPLE]): The list of samples.
 
     Methods
     -------
@@ -270,17 +253,18 @@ class Samples(UserList[S]):
 
     """
 
-    data: list[S] = field(factory=list)
-    sample_class: ClassVar[type[Sample]] = Sample
+    _mixins: ClassVar[tuple[type[Samples], ...]] = ()
+    _sample_class: ClassVar[type[Sample]] = Sample
+    sample_class: ClassVar[_SampleClassDescriptor] = _SampleClassDescriptor()
     merge: ClassVar[Merger] = Merger()
+    data: list[SAMPLE] = field(factory=list)
     output: set[Output | OutputGlob] = field(factory=set, converter=set, on_setattr=convert)
-    _mixins: ClassVar[tuple[type["Samples"], ...]] = ()
 
     def __init__(self, data: list | None = None, /, **kwargs: Any) -> None:
         self.__attrs_init__(**kwargs)  # ty: ignore[unresolved-attribute]
         super().__init__(data or [])
 
-    def __getitem__(self, key: int | UUID) -> S:  # type: ignore[override]
+    def __getitem__(self, key: int | UUID) -> SAMPLE:  # ty: ignore[invalid-method-override]
         if isinstance(key, int):
             return super().__getitem__(key)
 
@@ -292,7 +276,7 @@ class Samples(UserList[S]):
 
         raise TypeError(f"Key {key!r} is not an int or a UUID")
 
-    def __setitem__(self, key: int | UUID, value: S) -> None:  # type: ignore[override]
+    def __setitem__(self, key: int | UUID, value: SAMPLE) -> None:  # ty: ignore[invalid-method-override]
         if isinstance(key, int):
             super().__setitem__(key, value)
         elif isinstance(key, UUID) and key in self:
@@ -302,7 +286,7 @@ class Samples(UserList[S]):
         else:
             raise TypeError(f"Key {key!r} is not an int or a UUID")
 
-    def __contains__(self, item: S | UUID) -> bool:  # type: ignore[override]
+    def __contains__(self, item: SAMPLE | UUID) -> bool:  # ty: ignore[invalid-method-override]
         if isinstance(item, UUID):
             return any(s.uuid == item for s in self)
         else:
@@ -321,8 +305,12 @@ class Samples(UserList[S]):
     def __reduce__(self) -> str | tuple[Any, ...]:
         state = self.__getstate__()
         args = ()
-        kwargs: dict[str, Any] = {}
-        cls_kwargs = {"sample_class": self.sample_class}
+        kwargs = {
+            name: state.pop(name)  # nofmt
+            for name, attribute in fields_dict(self.__class__).items()
+            if attribute.kw_only
+        }
+        cls_kwargs = {"_sample_class": self.sample_class}
         return (_reconstruct, (Samples, self._mixins, args, kwargs, state, cls_kwargs))
 
     def __or__(self, other: Samples) -> Samples:
@@ -337,20 +325,16 @@ class Samples(UserList[S]):
     def __ior__(self, other: Samples) -> Samples:
         if self.__class__.__name__ != other.__class__.__name__:
             raise MergeSamplesTypeError(f"Cannot merge {self.__class__} with {other.__class__}")
-
         for sample in other:
             self[sample.uuid] = sample
 
         return self
-
-
 
     def __and__(self, other: Samples) -> Samples:
         """Returns a Samples object with samples from both self and other, merging attributes."""
         samples = deepcopy(self)
         samples &= other
         return samples
-
 
     def __iand__(self, other: Samples) -> Samples:
         if self.__class__.__name__ != other.__class__.__name__:
@@ -362,8 +346,9 @@ class Samples(UserList[S]):
         return self
 
     def __xor__(self, other: Samples) -> Samples:
-        """Replace all attributes and samples in 'self' with those from 'other', effectively
-        replacing 'self' with a copy of 'other'.
+        """Return a Samples object with samples from both self and other, without merging attributes.
+
+        Also update all fields in 'self' with those from 'other' (except for the 'data' field).
         """
         samples = deepcopy(self)
         samples ^= other
@@ -372,26 +357,26 @@ class Samples(UserList[S]):
     def __ixor__(self, other: Samples) -> Samples:
         if self.__class__.__name__ != other.__class__.__name__:
             raise MergeSamplesTypeError(f"Cannot merge {self.__class__} with {other.__class__}")
+        self |= other
         for field_ in fields_dict(self.__class__):
+            if field_ == "data":
+                continue
             other_ = getattr(other, field_)
             setattr(self, field_, other_)
         return self
 
     @merge.register("data")
     @staticmethod
-    def _merge_data(this: list[Sample], that: list[Sample]) -> list[Sample]:
-        data: list[Sample] = []
+    def _merge_data(this: list[SAMPLE], that: list[SAMPLE]) -> list[SAMPLE]:
+        data: list[SAMPLE] = []
         for uuid in {s.uuid for s in (*this, *that)}:
             this_, that_ = None, None
             with suppress(StopIteration):
                 this_ = next(s for s in this if s.uuid == uuid)
             with suppress(StopIteration):
                 that_ = next(s for s in that if s.uuid == uuid)
-            data.append(
-                this_ & that_ if this_ and that_ else this_ or that_,  # type: ignore[arg-type]
-            )
-            # arg-type can be ignored because uuid is guaranteed
-            # to be in at least one of the lists
+            data.append(this_ & that_ if this_ and that_ else this_ or that_)  # ty: ignore[invalid-argument-type]
+            # invalid-argument-type can be ignored because uuid is guaranteed to be in at least one of the lists
 
         return data
 
@@ -405,15 +390,30 @@ class Samples(UserList[S]):
         """Get samples from a YAML file"""
         samples = []
         yaml = YAML(typ="safe")
-        for sample in yaml.load(path):
-            _id = sample.pop("id")
-            samples.append(
-                cls.sample_class(id=str(_id), **sample),  # type: ignore[call-arg]
-            )
-        return cls(samples)
+
+        try:
+            for sample in yaml.load(path):
+                (samples.append(cls.sample_class(**sample)),)
+            return cls(samples)
+        except TypeError as exc:
+            missing_fields = [
+                repr(f.name)
+                for f in fields(cls.sample_class)
+                if f.name not in sample
+                and f.init is True
+                and f.default is NOTHING
+            ]
+            if missing_fields:
+                raise TypeError(
+                    "Missing required field(s) "
+                    f"{', '.join(missing_fields)} "
+                    "for at least one sample"
+                ) from exc
+            else:
+                raise exc
 
     @classmethod
-    def with_mixins(cls, mixins: Sequence[type[Samples]]) -> type[Samples]:
+    def with_mixins(cls, mixins: Sequence[type[SAMPLES]]) -> type[SAMPLES]:
         """Returns a new Samples class with the specified mixins as base classes.
 
         Internally called by Cellophane with the samples mixins specified
@@ -422,18 +422,18 @@ class Samples(UserList[S]):
 
         Args:
         ----
-            cls (type): The class to apply the mixins to.
-            mixins (Iterable[type]): An iterable of mixin classes to apply.
+            cls (type[SAMPLES]): The class to apply the mixins to.
+            mixins (Iterable[type[SAMPLES]]): An iterable of mixin classes to apply.
 
         Returns:
         -------
             type: The new class with the mixins applied.
 
         """
-        return _apply_mixins(cls, mixins, sample_class=cls.sample_class)
+        return cast(type[SAMPLES], _apply_mixins(cls, mixins, _sample_class=cls.sample_class))
 
     @classmethod
-    def with_sample_class(cls, sample_class: type[Sample]) -> type[Samples]:
+    def with_sample_class(cls, sample_class: type[SAMPLE]) -> type[SAMPLES[SAMPLE]]:
         """Returns a new Samples class with the specified sample class as the
         class to use for samples.
 
@@ -442,24 +442,24 @@ class Samples(UserList[S]):
 
         Args:
         ----
-            cls (type): The class to apply the mixins to.
-            sample_class (type): The class to use for samples.
+            cls (type[SAMPLES]): The class to apply the mixins to.
+            sample_class (type[SAMPLE]): The class to use for samples.
 
         Returns:
         -------
-            type: The new class with the sample class applied.
+            type[SAMPLES]: The new class with the sample class applied.
 
         """
-        return type(cls.__name__, (cls,), {"sample_class": sample_class})  # ty: ignore[invalid-return-type]
+        return type(cls.__name__, (cls,), {"_sample_class": sample_class})
 
-    def split(self, by: str | None = "uuid") -> Iterable[tuple[Any, Samples[S]]]:
+    def split(self, by: str | Callable | None = "uuid", **kwargs) -> Iterable[tuple[Any, Samples[SAMPLE]]]:
         """Splits the data into groups based on the specified attribute value.
 
         Args:
         ----
-            by (str | None): The attribute to link the samples by.
-                Defaults to None, which results in Samples objects with one
-                sample each.
+            by (str | Callable | None): The attribute to link the samples by, or a callable
+                that takes a sample and returns the value to link by. Defaults to "uuid",
+                which results in Samples objects with one sample each.
 
         Yields:
         ------
@@ -503,11 +503,49 @@ class Samples(UserList[S]):
 
         """
         if by is None:
-            yield None, self
+            return [(None, self)]
+        elif callable(by):
+
+            def _by(sample: SAMPLE, **kwargs) -> Any:
+                sig = signature(by)
+                kwargs["sample"] = sample
+                kwargs = {k: v for k, v in kwargs.items() if k in sig.parameters}
+                try:
+                    result = by(**kwargs)  # ty: ignore[call-top-callable]
+                except Exception as exc:
+                    raise SplitFunctionError(
+                        f"Error calling 'by' callable {by!r} with sample "  # nofmt
+                        f"{sample!r} and kwargs {kwargs!r}: {exc}"
+                    ) from exc
+                return result
+
+        elif isinstance(by, str):
+
+            def _by(sample: SAMPLE, **kwargs) -> Any:
+                del kwargs  # unused
+                return getattr(sample, by)
         else:
-            yield from {
-                sample[by]: self.__class__([li for li in self if li[by] == sample[by]]) for sample in self
-            }.items()
+            raise TypeError("Argument 'by' must be a string or a callable that returns a grouping value")
+
+        grouped_samples: dict[Any, Samples[SAMPLE]] = {}
+        for sample in self:
+            try:
+                group_var = _by(sample=sample, **kwargs)
+            except AttributeError:
+                group_var = None
+            except SplitFunctionError as exc:
+                warn(str(exc))
+                group_var = None
+            except Exception as exc:
+                warn(f"Error getting group for sample {sample!r}: {exc}")
+                group_var = None
+            try:
+                group = grouped_samples[group_var]
+            except KeyError:
+                group = grouped_samples[group_var] = self.__class__()
+            group.append(sample)
+
+        return list(grouped_samples.items())
 
     @property
     def unique_ids(self) -> set[str]:
@@ -534,7 +572,7 @@ class Samples(UserList[S]):
         return {s.id for s in self}
 
     @property
-    def with_files(self) -> Samples:
+    def with_files(self) -> Samples[SAMPLE]:
         """Get only samples with existing files from a Samples object.
 
         Returns
@@ -548,7 +586,7 @@ class Samples(UserList[S]):
         return instance
 
     @property
-    def without_files(self) -> Samples:
+    def without_files(self) -> Samples[SAMPLE]:
         """Get only samples without existing files from a Samples object.
 
         Returns
@@ -557,12 +595,17 @@ class Samples(UserList[S]):
 
         """
         instance = deepcopy(self)
-        instance.data = [sample for sample in self if not sample.files or any(not Path(f).exists() for f in sample.files)]
+        instance.data = [
+            sample  # nofmt
+            for sample in self
+            if not sample.files
+            or any(not Path(f).exists() for f in sample.files)
+        ]
 
         return instance
 
     @property
-    def complete(self) -> Samples:
+    def complete(self) -> Samples[SAMPLE]:
         """Get only completed samples from a Samples object.
 
         Samples are considered as completed if all runners have completed
@@ -579,15 +622,15 @@ class Samples(UserList[S]):
         return instance
 
     @property
-    def unprocessed(self) -> Samples:
-        """Get only completed samples from a Samples object.
+    def unprocessed(self) -> Samples[SAMPLE]:
+        """Get only unprocessed samples from a Samples object.
 
-        Samples are considered as completed if all runners have completed
-        successfully, and the sample is marked as done.
+        Samples are considered as unprocessed if none of the runners have processed the sample,
+        and the sample is not marked as done.
 
         Returns
         -------
-            Class: A new instance of the class with only the completed samples.
+            Class: A new instance of the class with only the unprocessed samples.
 
         """
         instance = deepcopy(self)
@@ -596,7 +639,7 @@ class Samples(UserList[S]):
         return instance
 
     @property
-    def failed(self) -> Samples:
+    def failed(self) -> Samples[SAMPLE]:
         """Get only failed samples from a Samples object.
 
         Samples are considered as failed if one or more of the runners has not

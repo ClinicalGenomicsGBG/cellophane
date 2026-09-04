@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from cellophane.cleanup import Cleaner, DeferredCleaner
     from cellophane.executors import Executor
     from cellophane.util import NamedCallable, Timestamp
+    from cellophane.modules import SAMPLE_PREDICATE, EXCEPTION_PREDICATE
 
 
 class _AFTER_ALL: ...
@@ -35,7 +36,7 @@ class _BaseHook:
     label: str
     func: NamedCallable
     when: Literal["pre", "post", "exception"]
-    condition: Literal["always", "complete", "unprocessed", "failed"]
+    condition: Literal["always", "complete", "unprocessed", "failed"] | EXCEPTION_PREDICATE | SAMPLE_PREDICATE
     before: DEPENDENCY_TYPE
     after: DEPENDENCY_TYPE
     per: Literal["session", "sample", "runner"] = "session"
@@ -45,7 +46,7 @@ class _BaseHook:
         func: NamedCallable,
         when: Literal["pre", "post", "exception"],
         label: str | None = None,
-        condition: Literal["always", "complete", "unprocessed", "failed"] = "always",
+        condition: Literal["always", "complete", "unprocessed", "failed"] | EXCEPTION_PREDICATE | SAMPLE_PREDICATE = "always",
         before: str | DEPENDENCY_TYPE | None = None,
         after: str | DEPENDENCY_TYPE | None = None,
         per: Literal["session", "sample", "runner"] = "session",
@@ -102,7 +103,7 @@ class _BaseHook:
     ) -> Any:
         logger = LoggerAdapter(getLogger(), {"label": self.label})
         logger.debug(f"Running {self.label} hook")
-        _workdir = config.workdir / config.tag  # ty: ignore[unsupported-operator]
+        _workdir = config.workdir / config.tag
         with executor_cls(
             config=config,
             log_queue=log_queue,
@@ -130,7 +131,7 @@ class _PrePostHook(_BaseHook):
         func: NamedCallable,
         when: Literal["pre", "post"],
         label: str | None = None,
-        condition: Literal["always", "complete", "unprocessed", "failed"] = "always",
+        condition: Literal["always", "complete", "unprocessed", "failed"] | SAMPLE_PREDICATE = "always",
         before: str | DEPENDENCY_TYPE | None = None,
         after: str | DEPENDENCY_TYPE | None = None,
         per: Literal["session", "sample", "runner"] = "session",
@@ -145,7 +146,7 @@ class _PrePostHook(_BaseHook):
             per=per,
         )
 
-    def __call__(  # type: ignore[override]
+    def __call__(
         self,
         samples: Samples,
         config: Config,
@@ -156,7 +157,7 @@ class _PrePostHook(_BaseHook):
         cleaner: Cleaner | DeferredCleaner,
         checkpoints: Checkpoints,
         dispatcher: Any,
-    ) -> Samples:
+    ) -> Samples:  # ty: ignore[invalid-method-override]
         logger = LoggerAdapter(getLogger(), {"label": self.label})
         match super().__call__(
             samples=samples,
@@ -189,7 +190,7 @@ class PreHook(_PrePostHook):
         self,
         func: NamedCallable,
         label: str | None = None,
-        condition: Literal["always", "unprocessed", "failed"] = "always",
+        condition: Literal["always", "unprocessed", "failed"] | SAMPLE_PREDICATE = "unprocessed",
         before: str | DEPENDENCY_TYPE | None = None,
         after: str | DEPENDENCY_TYPE | None = None,
         per: Literal["session", "sample", "runner"] = "session",
@@ -214,7 +215,7 @@ class PostHook(_PrePostHook):
         self,
         func: NamedCallable,
         label: str | None = None,
-        condition: Literal["always", "complete", "failed"] = "always",
+        condition: Literal["always", "complete", "failed"] | SAMPLE_PREDICATE = "always",
         before: str | DEPENDENCY_TYPE | None = None,
         after: str | DEPENDENCY_TYPE | None = None,
         per: Literal["session", "sample", "runner"] = "session",
@@ -234,7 +235,7 @@ class ExceptionHook(_BaseHook):
     """Cellophane exception-hook."""
 
     when: Literal["exception"]
-    condition: Literal["always"]
+    condition: Literal["always"] | EXCEPTION_PREDICATE
 
     def __init__(
         self,
@@ -242,18 +243,19 @@ class ExceptionHook(_BaseHook):
         label: str | None = None,
         before: str | DEPENDENCY_TYPE | None = None,
         after: str | DEPENDENCY_TYPE | None = None,
+        condition: EXCEPTION_PREDICATE | None = None,
     ) -> None:
         super().__init__(
             func,
             when="exception",
             label=label,
-            condition="always",
+            condition=condition or "always",
             before=before,
             after=after,
             per="session",
         )
 
-    def __call__(  # type: ignore[override]
+    def __call__(
         self,
         exception: BaseException,
         config: Config,
@@ -262,7 +264,7 @@ class ExceptionHook(_BaseHook):
         log_queue: Queue,
         timestamp: Timestamp,
         dispatcher: Any,
-    ) -> Any:
+    ) -> Any:  # ty: ignore[invalid-method-override]
         super().__call__(
             exception=exception,
             config=config,
@@ -272,7 +274,6 @@ class ExceptionHook(_BaseHook):
             timestamp=timestamp,
             dispatcher=dispatcher,
         )
-
 
 def resolve_dependencies(
     hooks: list[PreHook | PostHook | ExceptionHook],

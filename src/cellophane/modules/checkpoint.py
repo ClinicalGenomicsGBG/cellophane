@@ -54,7 +54,7 @@ class Checkpoint:
         self.file = self.base_path / f"{self.prefix}.{self.label}.json"
         try:
             self._cache = json.loads(self.file.read_text())
-        except Exception:  # pylint: disable=broad-except
+        except Exception:
             self._cache = None
 
     @cached_property
@@ -243,7 +243,7 @@ class Checkpoints:
 
     def __attrs_post_init__(self, *args: Any, **kwargs: Any) -> None:
         del args, kwargs
-        self.base_path = self.config.workdir / self.config.tag / "checkpoints"  # ty: ignore[unsupported-operator]
+        self.base_path = self.config.workdir / self.config.tag / "checkpoints"
         self.base_path.mkdir(parents=True, exist_ok=True)
 
     def __getattr__(self, key: str) -> Checkpoint:

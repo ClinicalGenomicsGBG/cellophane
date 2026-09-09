@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import TYPE_CHECKING, get_args
+from typing import TYPE_CHECKING, Any, cast, get_args
 
 import rich_click as click
 from attrs import define, field, setters
-
-from .click_ import FORMATS, SCHEMA_TYPES, InvertibleParamType, click_type
 from click.parser import UNSET
 
+from .click_ import FORMATS, SCHEMA_TYPES, InvertibleParamType, click_type
+
 if TYPE_CHECKING:
-    from typing import Any, Callable, Iterable, SupportsFloat, Type
+    from collections.abc import Callable, Iterable
+    from typing import SupportsFloat, Type  # noqa: UP035
 
     from .click_ import FormattedString, ParsedSize, StringMapping, TypedArray
 
@@ -73,6 +74,7 @@ class Flag:
     enum: list | None = field(default=None)
     required: bool = field(default=False)
     secret: bool = field(default=False)
+    hidden: bool = field(default=False)
 
     @type.validator  # ty: ignore[unresolved-attribute]
     def _type(self, attribute: str, value: str | None) -> None:
@@ -112,7 +114,7 @@ class Flag:
     def click_type(
         self,
     ) -> (
-        Type
+        Type  # noqa: UP006
         | click.Path
         | click.Choice
         | click.IntRange
@@ -180,22 +182,26 @@ class Flag:
         """
 
         type_ = self.click_type
-        default = self.default if self.value is None else self.value
+        default = (
+            self.value if self.value is not None
+            else False if self.default is UNSET and self.type == "boolean"
+            else self.default
+        )
+        show_default = (
+            False if self.secret or default is UNSET
+            else type_.invert(cast(Any, default)) if isinstance(type_, InvertibleParamType)
+            else str(default)
+        )
+
         return click.option(
             (f"--{self.flag}/--{self.no_flag}" if self.type == "boolean" else f"--{self.flag}"),
             self.flag,
             type=type_,
-            default=True if self.type == "boolean" and default is UNSET else default,
+            default=default,
             required=self.required,
             help=self.description,
-            show_default=(
-                (self.secret or default is UNSET)
-                or (
-                    type_.invert(default)  # nofmt
-                    if default and isinstance(type_, InvertibleParamType)
-                    else str(default)
-                )
-            ),
+            hidden=self.hidden,
+            show_default=show_default,
         )
 
     @property

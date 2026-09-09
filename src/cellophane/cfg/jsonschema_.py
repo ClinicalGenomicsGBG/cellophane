@@ -131,6 +131,7 @@ def properties_(
                 "enum": subschema.get("enum"),
                 "description": subschema.get("description"),
                 "secret": subschema.get("secret", False),
+                "hidden": subschema.get("hidden", False),
                 "items": subschema.get("items"),
                 "format": subschema.get("format"),
                 "pattern": subschema.get("pattern"),
@@ -141,7 +142,7 @@ def properties_(
                 for k, v in _flag_kwargs.items():
                     setattr(flags[key], k, v)
             else:
-                flag = Flag(**_flag_kwargs)  # ty: ignore[invalid-argument-type]
+                flag = Flag(**_flag_kwargs)
                 flags[key] = flag
 
             if (default := subschema.get("default")) is not None:

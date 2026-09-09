@@ -161,18 +161,87 @@ class Test_samples(BaseTest):
 
 class Test_mixins(BaseTest):
     args = ["--workdir out"]
-    structure = {
-        "modules/mixins.py": """
-            from cellophane import Sample
-            from attrs import define
 
-            @define(slots=True)
-            class SampleMixin(Sample):
-                x: int = 1
-        """,
-    }
+    @mark.override(
+        structure = {
+            "modules/mixins.py": """
+                from cellophane import Sample
+                from attrs import define
 
+                @define(slots=True)
+                class SampleMixin(Sample):
+                    x: int = 1
+            """,
+        }
+    )
     def test_slotted_mixin(self, invocation: Invocation) -> None:
         assert invocation.logs == literal(
             "SampleMixin: Mixins must not have __slots__ (use @define(slots=False) and don't set __slots__ in the class body)"
+        )
+
+    @mark.override(
+        args = [*args, "--samples_file samples.yaml"],
+        structure = {
+            "samples.yaml": """
+                - id: a
+                  y: "my"
+                  b: "hovercraft"
+                - id: b
+                  y: "is"
+                  b: "full"
+                - id: c
+                  y: "of"
+                  b: "eels"
+            """,
+            "modules/mixins.py": """
+                from cellophane import Sample, pre_hook
+                from attrs import define, field
+
+                @define(slots=False)
+                class SampleMixinA(Sample):
+                    x: int = 13
+                    y: str = field(kw_only=True)
+
+                @define(slots=False)
+                class SampleMixinB(Sample):
+                    a: int = 37
+                    b: str = field(kw_only=True)
+
+                @pre_hook()
+                def my_pre_hook(samples, logger, **_) -> None:
+                    for sample in samples:
+                        logger.info(f"{sample.y} {sample.b}")
+            """,
+        }
+    )
+    def test_kw_only_mixin(self, invocation: Invocation) -> None:
+        assert invocation.exit_code == 0
+        assert invocation.exception is None
+        assert invocation.logs == literal(
+            "my hovercraft",
+            "is full",
+            "of eels"
+        )
+
+    @mark.override(
+        args = [*args, "--samples_file samples.yaml"],
+        structure = {
+            "samples.yaml": """
+                - id: a
+            """,
+            "modules/mixins.py": """
+                from cellophane import Sample
+                from attrs import define, field
+
+                @define(slots=False)
+                class SampleMixin(Sample):
+                    a: int = 13
+                    b: str = field(kw_only=True)
+                    c: str = field(kw_only=True)
+            """,
+        }
+    )
+    def test_kw_only_mixin_missing_value(self, invocation: Invocation) -> None:
+        assert invocation.logs == literal(
+            "Failed to load samples from samples.yaml: Missing required field(s) 'b', 'c' for at least one sample",
         )

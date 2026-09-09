@@ -1,17 +1,16 @@
 """Tests for the data module."""
 
-# pylint: disable=pointless-statement
 from copy import deepcopy
 from pathlib import Path
 from typing import ClassVar
 
 import dill
 from attrs import define, field
-from cellophane import Timestamp, data
-from pytest import FixtureRequest, MonkeyPatch, fixture, mark, param, raises
-from pytest_mock import MockerFixture
+from cellophane import data
+from pytest import fixture, mark, param, raises
 
 LIB = Path(__file__).parent / "lib"
+
 
 
 @define(init=False, slots=False)
@@ -19,9 +18,8 @@ class Dummy(data.Container):
     a: int = field(default=1337)
     x: data.Container | None = field(default=None)
 
-    @a.validator
+    @a.validator  # ty: ignore[unresolved-attribute]
     def _validate_a(self, attribute: str, value: int) -> None:
-        del attribute  # unused
         if isinstance(value, int) and value > 9000:
             raise ValueError("It's over 9000!")
 
@@ -43,10 +41,10 @@ class Test_Container:
         assert _container["d", "e"] == 1339
 
         with raises(TypeError):
-            _container[1337] = 1337  # type: ignore[index]
+            _container[1337] = 1337  # ty: ignore[invalid-assignment]
 
         with raises(TypeError):
-            _container[1337]  # type: ignore[index]
+            _container[1337]  # ty: ignore[invalid-argument-type]
 
     def test_setitem_attr(self) -> None:
         _dummy = Dummy()
@@ -62,7 +60,7 @@ class Test_Container:
 
     @staticmethod
     def test_deepcopy() -> None:
-        _dummy = Dummy(a={"b": 1338})  # type: ignore[call-arg]
+        _dummy = Dummy(a={"b": 1338})
         _dummy_ref = _dummy
         _dummy_copy = deepcopy(_dummy)
 
@@ -116,7 +114,7 @@ class Test_Sample:
     @staticmethod
     def test_setitem() -> None:
         @define
-        class _SampleSub(data.Sample):  # type: ignore[no-untyped-def]
+        class _SampleSub(data.Sample):
             a: int = 1337
 
         _sample = _SampleSub(id="a", files=["b"])
@@ -152,15 +150,13 @@ class Test_Sample:
     @staticmethod
     def test_with_mixins() -> None:
         @define(slots=False)
-        class _mixin(data.Sample):  # type: ignore[no-untyped-def]
+        class _mixin(data.Sample):
             a: str = "Hello"
             b: str = field(default="World")
             c: int = 1337
             d: ClassVar[int] = 1338
 
-        _sample_class: type[_mixin] = data.Sample.with_mixins(
-            [_mixin],  # type: ignore[assignment]
-        )
+        _sample_class = data.Sample.with_mixins([_mixin])
 
         assert _sample_class is not data.Samples
         assert _sample_class.d == 1338
@@ -174,8 +170,7 @@ class Test_Sample:
     @staticmethod
     def test_slotted_mixin() -> None:
         @define(slots=True)
-        # FIXME: What triggers this mypy error?
-        class _mixin(data.Sample):  # type: ignore[no-untyped-def]
+        class _mixin(data.Sample):
             a: str = "Hello"
 
         with raises(TypeError):
@@ -284,9 +279,7 @@ class Test_Samples:
             c: int = 1337
             d: ClassVar[int] = 1338
 
-        _samples_class: type[_mixin] = data.Samples.with_mixins(
-            [_mixin],  # type: ignore[assignment]
-        )
+        _samples_class = data.Samples.with_mixins([_mixin])
         assert _samples_class is not data.Samples
         assert _samples_class.d == 1338
 
@@ -310,7 +303,7 @@ class Test_Samples:
                 data.Sample(id="b", files=["c", "d"]),
             ],
         )
-        assert samples[samples[0].uuid] == samples[0]  # pylint: disable=no-member
+        assert samples[samples[0].uuid] == samples[0]
 
         sample_c = data.Sample(id="c", files=["e", "f"])
         with raises(KeyError):
@@ -328,10 +321,10 @@ class Test_Samples:
         assert samples[sample_d.uuid] == samples[0] == sample_d
 
         with raises(TypeError):
-            samples["INVALID"] = sample_d  # type: ignore[index]
+            samples["INVALID"] = sample_d  # ty: ignore[invalid-assignment]
 
         with raises(TypeError):
-            samples["INVALID"]  # type: ignore[index]
+            samples["INVALID"]  # ty: ignore[invalid-argument-type]
 
     @staticmethod
     def test_contains() -> None:
@@ -346,10 +339,7 @@ class Test_Samples:
 
     @staticmethod
     def test_and() -> None:
-        
-
-        class _SamplesSubA(data.Samples):
-            pass
+        class _SamplesSubA(data.Samples): ...
 
         _samples_a1: data.Samples = data.Samples(
             [
@@ -369,8 +359,7 @@ class Test_Samples:
 
     @staticmethod
     def test_or() -> None:
-        class _SamplesSub(data.Samples):
-            pass
+        class _SamplesSub(data.Samples): ...
 
         _sample_a = data.Sample(id="a", files=["a", "b"])
         _sample_b = data.Sample(id="b", files=["c", "d"])

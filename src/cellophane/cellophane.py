@@ -4,9 +4,10 @@ from __future__ import annotations
 import time
 from importlib.metadata import version
 from importlib.util import find_spec
+from importlib.machinery import ModuleSpec
 from logging import LoggerAdapter, getLogger
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from humanfriendly import format_timespan
 from rich_click import rich_click
@@ -34,8 +35,8 @@ if TYPE_CHECKING:
     from cellophane.cfg import Config
 
 
-spec = find_spec("cellophane")
-CELLOPHANE_ROOT = Path(spec.origin).parent  # type: ignore[union-attr, arg-type]
+spec = cast(ModuleSpec, find_spec("cellophane"))
+CELLOPHANE_ROOT = Path(cast(str, spec.origin)).parent
 CELLOPHANE_VERSION = version("cellophane")
 
 
@@ -92,7 +93,7 @@ def cellophane(label: str, root: Path) -> Command:
         _SAMPLES = Samples.with_sample_class(_SAMPLE).with_mixins(samples_mixins)
         schema.properties.executor.properties.name.enum = [e.name for e in executors_]
 
-        @with_options(schema)
+        @with_options(schema, root)
         def inner(config: Config, **_: Any) -> None:
             """Run cellophane"""
             start_time = Timestamp()
@@ -123,7 +124,7 @@ def cellophane(label: str, root: Path) -> Command:
             executors.EXECUTOR = executor_cls
             logger.debug(f"Using {executor_cls.name} executor")
 
-            config.analysis = label  # type: ignore[attr-defined]
+            config.analysis = label
             dispatcher = Dispatcher(
                 hooks=hooks,
                 runners=runners,
@@ -170,8 +171,12 @@ def _main(
     """Run cellophane"""
     # Load samples from file, or create empty samples object
     if "samples_file" in config:
-        logger.debug(f"Loading samples from {config.samples_file}")
-        samples = samples_class.from_file(config.samples_file)
+        try:
+            logger.debug(f"Loading samples from {config.samples_file}")
+            samples = samples_class.from_file(config.samples_file)
+        except Exception as exc:
+            logger.critical(f"Failed to load samples from {config.samples_file}: {exc}")
+            raise SystemExit(1) from exc
     else:
         logger.debug("No samples file specified, creating empty samples object")
         samples = samples_class()
@@ -186,13 +191,6 @@ def _main(
         samples=samples,
         cleaner=cleaner,
     )
-
-    # Validate sample files
-    # FIXME: Make validation configurable
-    for sample in samples:
-        if sample not in samples.with_files:
-            logger.warning(f"Sample {sample} will be skipped as it has no files")
-            sample.fail("Missing files")
 
     # Start runners for unprocessed samples and mergeback failed samples after
     samples = (

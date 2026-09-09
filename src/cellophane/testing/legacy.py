@@ -73,7 +73,7 @@ def parametrize_from_yaml(paths: list[Path]) -> Callable:
         "YAML test definitions will be removed in a future release. "
         "Please check the documentation for more information regarding the new "
         "testing API.",
-        DeprecationWarning,
+        category=DeprecationWarning,
         stacklevel=2,
     )
 

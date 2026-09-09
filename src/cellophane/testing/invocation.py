@@ -146,7 +146,7 @@ class Invocation:
                 env={"TERM": "dumb"},
                 standalone_mode=False,
             )
-        except (SystemExit, Exception) as exc:  # pylint: disable=broad-except
+        except (SystemExit, Exception) as exc:
             self.exception: BaseException | None = exc
             self.exit_code = 1
             self.output = ""

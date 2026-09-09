@@ -171,6 +171,100 @@ class Test_hooks(BaseTest):
             "samples.yaml": """
                 - id: a
                   files:
+                  - input/dummy.txt
+                - id: b
+                  files:
+                  - input/dummy.txt
+                - id: c
+                  files:
+                  - input/dummy.txt
+                - id: d
+                  files:
+                  - input/dummy.txt
+            """,
+            "input/dummy.txt": "INPUT_DUMMY",
+
+            "modules/a.py": """
+                from cellophane import pre_hook, post_hook, runner, Sample, Samples
+
+                FIELDS = ("a", "b", "c", "d", "e", "f")
+
+                class MySample(Sample):
+                    a: str = "DEFAULT"
+                    b: str = "DEFAULT"
+                    c: str = "DEFAULT"
+                    d: str = "DEFAULT"
+                    e: str = "DEFAULT"
+                    f: str = "DEFAULT"
+
+                class MySamples(Samples):
+                    a: str = "DEFAULT"
+                    b: str = "DEFAULT"
+                    c: str = "DEFAULT"
+                    d: str = "DEFAULT"
+                    e: str = "DEFAULT"
+                    f: str = "DEFAULT"
+
+                def merge(this, other):
+                    merged = "_".join(sorted({str(this), str(other)}))
+                    return f"MERGED_{merged}"
+
+                for field in FIELDS:
+                    Sample.merge.register(field)(merge)
+                    Samples.merge.register(field)(merge)
+
+                def factory(field, value):
+                    def hook(samples, logger, **_):
+                        setattr(samples, field, value)
+                        for sample in samples:
+                            setattr(sample, field, value)
+                        return samples
+                    return hook
+
+                per_session_pre = pre_hook(per="session")(factory("a", "PER_SESSION_PRE"))
+                per_runner_pre = pre_hook(per="runner")(factory("b", "PER_RUNNER_PRE"))
+                runner_a = runner()(factory("c", "RUNNER_A"))
+                runner_b = runner()(factory("c", "RUNNER_B"))
+                per_runner_post = post_hook(per="runner")(factory("d", "PER_RUNNER_POST"))
+                per_sample_post = post_hook(per="sample")(factory("e", "PER_SAMPLE_POST"))
+                per_session_post = post_hook(per="session")(factory("f", "PER_SESSION_POST"))
+
+                @post_hook(after="all")
+                def post_hook_results(samples, logger, **_):
+                    for field in FIELDS:
+                        logger.critical(f"SAMPLES FIELD {field}: {getattr(samples, field)}")
+                        for sample in samples:
+                            logger.critical(f"SAMPLE {sample.id} FIELD {field}: {getattr(sample, field)}")
+
+            """
+        }
+    )
+    def test_post_hook_per_runner(self, invocation: Invocation) -> None:
+        assert invocation.logs == literal(
+            "SAMPLES FIELD a: MERGED_PER_SESSION_PRE",
+            "SAMPLES FIELD b: MERGED_PER_RUNNER_PRE",
+            "SAMPLES FIELD c: MERGED_RUNNER_A_RUNNER_B",
+            "SAMPLES FIELD d: MERGED_PER_RUNNER_POST",
+            "SAMPLES FIELD e: PER_SAMPLE_POST",
+            "SAMPLES FIELD f: PER_SESSION_POST",
+            *(
+                line for s in ("a", "b", "c", "d") for line in (
+                    f"SAMPLE {s} FIELD a: MERGED_PER_SESSION_PRE",
+                    f"SAMPLE {s} FIELD b: MERGED_PER_RUNNER_PRE",
+                    f"SAMPLE {s} FIELD c: MERGED_RUNNER_A_RUNNER_B",
+                    f"SAMPLE {s} FIELD d: MERGED_PER_RUNNER_POST",
+                    f"SAMPLE {s} FIELD e: PER_SAMPLE_POST",
+                    f"SAMPLE {s} FIELD f: PER_SESSION_POST",
+                )
+            )
+        )
+
+    @mark.override(
+        args=[*args, "--samples_file samples.yaml"],
+        structure={
+            "samples.yaml": """
+                - id: a
+                  files:
                   - input/a.txt
                 - id: b
                   files:
@@ -211,6 +305,256 @@ class Test_hooks(BaseTest):
             "Failed hook executed for ['a']",
             "Always hook executed for ['a', 'b']",
         )
+
+    @mark.override(
+        args=[*args, "--samples_file samples.yaml"],
+        structure={
+            "samples.yaml": """
+                - id: x_1
+                  a: x
+                  files:
+                  - input/DUMMY.txt
+                - id: x_2
+                  a: x
+                  files:
+                  - input/DUMMY.txt
+                - id: x_3
+                  a: x
+                  files:
+                  - input/DUMMY.txt
+                - id: y_1
+                  a: y
+                  files:
+                  - input/DUMMY.txt
+                - id: y_2
+                  a: y
+                  files:
+                  - input/DUMMY.txt
+                - id: y_3
+                  a: y
+                  files:
+                  - input/DUMMY.txt
+            """,
+            "input/DUMMY.txt": "DUMMY",
+            "schema.yaml": """
+                type: object
+                properties:
+                    foo:
+                        type: string
+                        default: x
+            """,
+
+            "modules/a.py": """
+                from cellophane import pre_hook, post_hook, Samples, Sample
+
+                class TestSamples(Samples):
+                    foo: str = "y"
+
+                class TestSample(Sample):
+                    a: str | None = None
+
+                @pre_hook(condition=lambda sample: sample.a == "x")
+                def pre_hook_x(samples, logger, **_):
+                    logger.info(f"pre_hook_x executed for {[s.id for s in samples]}")
+
+                @pre_hook(condition=lambda sample: sample.a == "y")
+                def pre_hook_y(samples, logger, **_):
+                    logger.info(f"pre_hook_y executed for {[s.id for s in samples]}")
+
+                @pre_hook(condition=lambda sample, config: sample.a == config.foo)
+                def pre_hook_config(samples, logger, **_):
+                    logger.info(f"pre_hook_config executed for {[s.id for s in samples]}")
+
+                @pre_hook(condition=lambda sample, samples: sample.a == samples.foo)
+                def pre_hook_samples(samples, logger, **_):
+                    logger.info(f"pre_hook_samples executed for {[s.id for s in samples]}")
+
+                @pre_hook(condition=lambda: True)
+                def pre_hook_true(samples, logger, **_):
+                    logger.info(f"pre_hook_true executed for {[s.id for s in samples]}")
+
+                @pre_hook(condition=lambda: False)
+                def pre_hook_false(samples, logger, **_):
+                    logger.info(f"pre_hook_false executed for {[s.id for s in samples]}")
+
+
+                @post_hook(condition=lambda sample: sample.a == "x")
+                def post_hook_x(samples, logger, **_):
+                    logger.info(f"post_hook_x executed for {[s.id for s in samples]}")
+
+                @post_hook(condition=lambda sample: sample.a == "y")
+                def post_hook_y(samples, logger, **_):
+                    logger.info(f"post_hook_y executed for {[s.id for s in samples]}")
+
+                @post_hook(condition=lambda sample, config: sample.a == config.foo)
+                def post_hook_config(samples, logger, **_):
+                    logger.info(f"post_hook_config executed for {[s.id for s in samples]}")
+
+                @post_hook(condition=lambda sample, samples: sample.a == samples.foo)
+                def post_hook_samples(samples, logger, **_):
+                    logger.info(f"post_hook_samples executed for {[s.id for s in samples]}")
+
+                @pre_hook(condition=lambda: True)
+                def pre_hook_true(samples, logger, **_):
+                    logger.info(f"pre_hook_true executed for {[s.id for s in samples]}")
+
+                @post_hook(condition=lambda: False)
+                def post_hook_false(samples, logger, **_):
+                    logger.info(f"post_hook_false executed for {[s.id for s in samples]}")
+            """
+        }
+    )
+    def test_predicate_pre_post_hooks(self, invocation: Invocation) -> None:
+        assert invocation.logs == literal(
+            "pre_hook_x executed for ['x_1', 'x_2', 'x_3']",
+            "pre_hook_y executed for ['y_1', 'y_2', 'y_3']",
+            "pre_hook_config executed for ['x_1', 'x_2', 'x_3']",
+            "pre_hook_samples executed for ['y_1', 'y_2', 'y_3']",
+            "pre_hook_true executed for ['x_1', 'x_2', 'x_3', 'y_1', 'y_2', 'y_3']",
+            "No samples satisfy condition for pre-hook 'pre_hook_false', skipping",
+            "post_hook_x executed for ['x_1', 'x_2', 'x_3']",
+            "post_hook_y executed for ['y_1', 'y_2', 'y_3']",
+            "post_hook_config executed for ['x_1', 'x_2', 'x_3']",
+            "post_hook_samples executed for ['y_1', 'y_2', 'y_3']",
+            "pre_hook_true executed for ['x_1', 'x_2', 'x_3', 'y_1', 'y_2', 'y_3']",
+            "No samples satisfy condition for post-hook 'post_hook_false', skipping",
+
+        )
+
+
+    @mark.override(
+        structure={
+            "schema.yaml": """
+                type: object
+                properties:
+                    foo:
+                        type: string
+                        default: x
+            """,
+            "modules/a.py": """
+                from cellophane import pre_hook, post_hook, Samples, Sample
+
+                def _throw_exception():
+                    raise Exception("DUMMY")
+
+                @pre_hook(condition=lambda config: config.foo == "x")
+                def pre_hook_config(samples, logger, **_):
+                    logger.info(f"pre_hook_config executed")
+
+                @pre_hook(condition=lambda: True)
+                def pre_hook_true(samples, logger, **_):
+                    logger.info(f"pre_hook_true executed")
+
+                @pre_hook(condition=lambda: False)
+                def pre_hook_false(samples, logger, **_):
+                    logger.info(f"pre_hook_false executed")
+
+                @pre_hook(condition=_throw_exception)
+                def pre_hook_exception(samples, logger, **_):
+                    logger.info(f"pre_hook_exception executed")
+
+                @post_hook(condition=lambda config: config.foo == "x")
+                def post_hook_config(samples, logger, **_):
+                    logger.info(f"post_hook_config executed")
+
+                @post_hook(condition=lambda: True)
+                def post_hook_true(samples, logger, **_):
+                    logger.info(f"post_hook_true executed")
+
+                @post_hook(condition=lambda: False)
+                def post_hook_false(samples, logger, **_):
+                    logger.info(f"post_hook_false executed")
+
+                @post_hook(condition=_throw_exception)
+                def post_hook_exception(samples, logger, **_):
+                    logger.info(f"post_hook_exception executed")
+            """
+        }
+    )
+    def test_predicate_pre_post_hooks_no_samples(self, invocation: Invocation) -> None:
+        assert invocation.exit_code == 0
+        assert invocation.logs == literal(
+            "pre_hook_config executed",
+            "pre_hook_true executed",
+            "No samples satisfy condition for pre-hook 'pre_hook_false', skipping",
+            "No samples satisfy condition for pre-hook 'pre_hook_exception', skipping",
+            "post_hook_config executed",
+            "post_hook_true executed",
+            "No samples satisfy condition for post-hook 'post_hook_false', skipping",
+            "No samples satisfy condition for post-hook 'post_hook_exception', skipping",
+            "Predicate function '_throw_exception' raised an exception: Exception('DUMMY')",
+        )
+        assert invocation.logs != literal(
+            "No samples satisfy condition for pre-hook 'pre_hook_config', skipping",
+            "No samples satisfy condition for post-hook 'post_hook_config', skipping",
+            "pre_hook_false executed",
+            "post_hook_false executed",
+            "pre_hook_exception executed",
+            "post_hook_exception executed",
+        )
+
+
+    @mark.override(
+        args=[*args, "--foo x", "--bar DUMMY"],
+        structure={
+            "schema.yaml": """
+                type: object
+                properties:
+                    foo:
+                        type: string
+                    bar:
+                        type: string
+            """,
+            "modules/a.py": """
+                from cellophane import exception_hook, pre_hook
+
+                class MyException(Exception): ...
+
+                @pre_hook()
+                def throw_exception(**_):
+                    raise MyException("DUMMY")
+
+                @exception_hook(condition=lambda: False)
+                def exception_hook_false(logger, **_):
+                    logger.info("exception_hook_false executed")
+
+                @exception_hook(condition=lambda: True)
+                def exception_hook_true(logger, **_):
+                    logger.info("exception_hook_true executed")
+
+                @exception_hook(condition=lambda config: config.foo == "x")
+                def exception_hook_config_true(logger, **_):
+                    logger.info("exception_hook_config_true executed")
+
+                @exception_hook(condition=lambda config: config.foo == "y")
+                def exception_hook_config_false(logger, **_):
+                    logger.info("exception_hook_config_false executed")
+
+                @exception_hook(condition=lambda exception: isinstance(exception, MyException))
+                def exception_hook_exception_class(logger, **_):
+                    logger.info("exception_hook_exception_class executed")
+
+                @exception_hook(condition=lambda exception, config: config.bar in exception.args)
+                def exception_hook_exception_complex(logger, **_):
+                    logger.info("exception_hook_exception_complex executed")
+            """
+        },
+    )
+    def test_exception_hook_predicate(self, invocation: Invocation) -> None:
+        assert invocation.exit_code == 0
+        assert invocation.logs == literal(
+            "Exception MyException('DUMMY') does not satisfy condition for exception hook 'exception_hook_config_false', skipping",
+            "Exception MyException('DUMMY') does not satisfy condition for exception hook 'exception_hook_false', skipping",
+            "exception_hook_true executed",
+            "exception_hook_config_true executed",
+            "exception_hook_exception_class executed",
+            "exception_hook_exception_complex executed",
+        )
+        assert invocation.logs != literal(
+            "exception_hook_false executed",
+            "exception_hook_config_false executed",
+        )
+
 
     @mark.override(
         structure={
@@ -272,7 +616,7 @@ class Test_hooks(BaseTest):
     def test_exception_hook_samples_merge(self, invocation: Invocation) -> None:
         assert invocation.logs == literal(
             'Unhandled exception when merging samples: Exception(\'DUMMY\')',
-            'Exception hook got exception: Exception(\'DUMMY\')'
+            'Exception hook got exception: MergeSamplesError("Unhandled exception when merging samples: Exception(\'DUMMY\')")'
         )
 
 
@@ -314,7 +658,7 @@ class Test_hooks(BaseTest):
     def test_exception_hook_cleaner_merge(self, invocation: Invocation) -> None:
         assert invocation.logs == literal(
             'Unhandled exception when merging cleaners: Exception(\'DUMMY\')',
-            'Exception hook got exception: Exception(\'DUMMY\')'
+            'Exception hook got exception: MergeCleanersError("Unhandled exception when merging cleaners: Exception(\'DUMMY\')")'
         )
 
     @mark.override(
@@ -742,6 +1086,20 @@ class Test_hooks(BaseTest):
     @mark.override(
         structure={
             "modules/a.py": """
+                from cellophane import pre_hook
+
+                @pre_hook(condition="INVALID")
+                def a(**_): ...
+            """
+        },
+    )
+    def test_pre_hook_invalid_condition(self, invocation: Invocation) -> None:
+        assert invocation.logs == literal("Unable to import module 'a': ValueError(\"Invalid condition for pre-hook: 'INVALID'. Must be one of 'always', 'unprocessed', 'failed', or a callable predicate.\")")
+
+
+    @mark.override(
+        structure={
+            "modules/a.py": """
                 from cellophane import post_hook
 
                 @post_hook(condition="INVALID")
@@ -749,7 +1107,19 @@ class Test_hooks(BaseTest):
             """
         },
     )
-    def test_hook_invalid_condition(self, invocation: Invocation) -> None:
-        assert invocation.logs == literal(
-            "Unable to import module 'a': ValueError(\"condition='INVALID' must be one of 'always', 'complete', 'failed'\")"
-        )
+    def test_post_hook_invalid_condition(self, invocation: Invocation) -> None:
+        assert invocation.logs == literal("Unable to import module 'a': ValueError(\"Invalid condition for post-hook: 'INVALID'. Must be one of 'always', 'complete', 'failed', or a callable predicate.\")")
+
+
+    @mark.override(
+        structure={
+            "modules/a.py": """
+                from cellophane import exception_hook
+
+                @exception_hook(condition="INVALID")
+                def a(**_): ...
+            """
+        },
+    )
+    def test_exception_hook_invalid_condition(self, invocation: Invocation) -> None:
+        assert invocation.logs == literal("Unable to import module 'a': ValueError(\"Invalid condition for exception hook: 'INVALID'. Must be a callable predicate or None.\")")

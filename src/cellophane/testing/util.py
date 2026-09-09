@@ -88,7 +88,7 @@ class regex:
         elif not isinstance(other, str):
             return self != repr(other)
 
-        return any(pattern.search(other) is None for pattern in self.patterns)
+        return all(pattern.search(other) is None for pattern in self.patterns)
 
 
 class literal(regex):

@@ -165,8 +165,9 @@ class Executor:
                 logger=logger,
             )
             if config.executor.environment.copy_to_workdir:
+                logger.debug(f"Copying environment to workdir: {_workdir}")
                 local_env_path = (_workdir / env_path.name).absolute()
-                copytree(env_path, local_env_path, dirs_exist_ok=True)
+                copytree(env_path, local_env_path, dirs_exist_ok=True, symlinks=True)
             else:
                 local_env_path = env_path.absolute()
 

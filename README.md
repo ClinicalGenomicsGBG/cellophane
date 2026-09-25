@@ -3,7 +3,7 @@
 <!-- markdownlint-disable MD036 Used for disclaimer -->
 
 <h1 align="center">
-<img src="images/cellophane.svg" />
+<img src="images/cellophane.svg" height="200"/>
 <br/>Cellophane
 
 [![Ruff](https://shieldcn.dev/badge/ruff.svg?size=xs&logo=ruff&color=D7FF64)](https://github.com/astral-sh/ruff)

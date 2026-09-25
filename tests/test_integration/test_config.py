@@ -271,18 +271,28 @@ class Test_parse_config(BaseTest):
                           type: string
                 no_type:
                   default: "DEFAULT"
+                secret:
+                  type: string
+                  secret: true
+                  default: "DEFAULT"
+                hidden:
+                  type: string
+                  default: "DEFAULT"
+                  hidden: true
         """,
     }
 
     args = ["--workdir", "out"]
 
     @mark.override(
-        args=[*args, "--help"],
+        args=[*args, "--secret VERY_SECRET", "--hidden ALSO_HIDDEN", "--help"],
     )
     def test_help(self, invocation: Invocation) -> None:
         # FIXME: Checking the help text is non-trivial as it will vary based on the width
         # of the terminal. This tends to cause false failures on GitHub Actions.
         assert invocation.exit_code == 0
+        assert invocation.output != literal("VERY_SECRET", "ALSO_HIDDEN", "--hidden")
+
 
     @mark.override(
         structure={

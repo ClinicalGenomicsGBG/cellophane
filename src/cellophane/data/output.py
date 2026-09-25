@@ -49,20 +49,20 @@ class Output:
 
 
 @define
-class OutputGlob:  # type: ignore[no-untyped-def]
+class OutputGlob:
     """Output glob find files to be copied to the another directory."""
 
     src: str = field(
         converter=str,
         on_setattr=convert,
     )
-    dst_dir: str | None = field(  # type: ignore[var-annotated]
+    dst_dir: str | None = field(
         default=None,
         kw_only=True,
         converter=lambda v: v if v is None else str(v),
         on_setattr=convert,
     )
-    dst_name: str | None = field(  # type: ignore[var-annotated]
+    dst_name: str | None = field(
         default=None,
         kw_only=True,
         converter=lambda v: v if v is None else str(v),

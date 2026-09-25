@@ -52,9 +52,9 @@ def _uptate_validators(
     for _validator in validators.values():
         if isinstance(_validator, partial):
             if "compiled" in _validator.keywords:
-                _validator.keywords.update({"compiled": compiled})  # ty: ignore[no-matching-overload]
+                _validator.keywords.update({"compiled": compiled})
             if "_path" in _validator.keywords:
-                _validator.keywords.update({"_path": _path})  # ty: ignore[no-matching-overload]
+                _validator.keywords.update({"_path": _path})
 
 
 def properties_(
@@ -147,7 +147,7 @@ def properties_(
             if (default := subschema.get("default")) is not None:
                 try:
                     flags[key].default = flags[key].convert(default)
-                except Exception as exc:  # pylint: disable=broad-except
+                except Exception as exc:
                     raise ValidationError(f"Invalid default value '{default}' for '{prop}'") from exc
 
 

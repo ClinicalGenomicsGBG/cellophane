@@ -112,7 +112,7 @@ def with_options(schema: Schema, root: Path) -> Callable:
             @click.command()
             @wraps(callable)
             def _callback(**kwargs: Any) -> Any:
-                config = Config(schema=schema)
+                config = Config()
                 for kwarg, flag in _final_flags.items():
                     if kwarg not in kwargs:
                         continue

@@ -10,6 +10,7 @@ from warnings import warn
 
 from attrs import define, field
 from attrs.setters import convert
+from cellophane.data import Container
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -40,11 +41,16 @@ class Output:
         converter=str,
         on_setattr=convert,
     )
-
     optional: bool = field(
         default=False,
         kw_only=True,
         converter=bool,
+        on_setattr=convert,
+    )
+    metadata: Container = field(
+        kw_only=True,
+        factory=Container,
+        converter=Container,
         on_setattr=convert,
     )
 
@@ -88,14 +94,12 @@ class OutputGlob:
         kw_only=True,
         on_setattr=convert,
     )
-
     checkpoint: str = field(
         default="main",
         kw_only=True,
         converter=str,
         on_setattr=convert,
     )
-
     optional: bool = field(
         default=False,
         kw_only=True,
@@ -204,6 +208,7 @@ class OutputGlob:
                         dst=dst,
                         optional=self.optional,
                         checkpoint=self.checkpoint.format(**meta),
+                        metadata=self.metadata,
                     ),
                 )
 

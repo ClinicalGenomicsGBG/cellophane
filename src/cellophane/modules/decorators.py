@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
     from cellophane.data import Samples, Sample
     from cellophane.modules.hook import DEPENDENCY_TYPE
-    from cellophane.util import NamedCallable
+    from cellophane.util import NamedCallable, Timestamp
     from cellophane.modules import SAMPLE_PREDICATE, EXCEPTION_PREDICATE
     from cellophane.cfg import Config
 
@@ -66,6 +66,9 @@ def output(
         def inner(
             *args: Any,
             samples: Samples,
+            config: Config,
+            timestamp: Timestamp,
+            workdir: Path,
             **kwargs: Any,
         ) -> Samples | None:
             glob_ = OutputGlob(
@@ -74,9 +77,19 @@ def output(
                 dst_name=dst_name,
                 checkpoint=checkpoint,
                 optional=optional,
+                config=config,
+                timestamp=timestamp,
+                workdir=workdir,
             )
             samples.output.add(glob_)
-            return func(*args, samples=samples, **kwargs)
+            return func(
+                *args,
+                samples=samples,
+                config=config,
+                timestamp=timestamp,
+                workdir=workdir,
+                **kwargs,
+            )
 
         inner.__name__ = func.__name__
         inner.__qualname__ = func.__qualname__

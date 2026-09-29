@@ -174,6 +174,7 @@ class Checkpoint:
 
     @property
     def _outputs(self) -> set[Output | OutputGlob]:
+        self.samples.output.clear_cache()
         return {o for o in self.samples.output if o.checkpoint == self.label}
 
     def store(self, *args: Any, **kwargs: Any) -> None:

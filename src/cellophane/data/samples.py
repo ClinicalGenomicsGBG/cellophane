@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, TypeVar, cast, overload
 from uuid import UUID, uuid4
 from warnings import warn
 
-from attrs import NOTHING, define, field, fields, fields_dict, make_class
+from attrs import NOTHING, define, field, fields, fields_dict, make_class, Factory, Converter
 from attrs.setters import convert, frozen
 from ruamel.yaml import YAML
 
@@ -19,12 +19,11 @@ from .container import Container
 from .exceptions import MergeSamplesTypeError, MergeSamplesUUIDError
 from .merger import Merger
 from .util import convert_path_list
+from cellophane.data.output import ResolvedOutputs
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from typing import Any, Iterable, Literal, Sequence
-
-    from cellophane.data import Output, OutputGlob
 
 SAMPLE = TypeVar("SAMPLE", bound="Sample")
 SAMPLES = TypeVar("SAMPLES", bound="Samples")
@@ -258,7 +257,10 @@ class Samples(UserList[SAMPLE]):
     sample_class: ClassVar[_SampleClassDescriptor] = _SampleClassDescriptor()
     merge: ClassVar[Merger] = Merger()
     data: list[SAMPLE] = field(factory=list)
-    output: set[Output | OutputGlob] = field(factory=set, converter=set, on_setattr=convert)
+    output: ResolvedOutputs = field(
+        default=Factory(ResolvedOutputs, takes_self=True),
+        converter=Converter(ResolvedOutputs._convert, takes_self=True)
+    )
 
     def __init__(self, data: list | None = None, /, **kwargs: Any) -> None:
         self.__attrs_init__(**kwargs)  # ty: ignore[unresolved-attribute]
@@ -382,7 +384,7 @@ class Samples(UserList[SAMPLE]):
 
     @merge.register("output")
     @staticmethod
-    def _merge_output(this: set[Output], that: set[Output]) -> set[Output]:
+    def _merge_output(this: ResolvedOutputs, that: ResolvedOutputs) -> ResolvedOutputs:
         return this | that
 
     @classmethod

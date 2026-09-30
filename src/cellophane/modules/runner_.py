@@ -140,9 +140,8 @@ class Runner:
                     cleaner=cleaner,
                     checkpoints=Checkpoints(
                         samples=samples,
-                        prefix=f"runner.{self.name}.{group}" if group is not None else f"runner.{self.name}",
-                        workdir=workdir,
                         config=config,
+                        prefix=f"runner.{self.name}.{group}" if group is not None else f"runner.{self.name}",
                     )
                 ):
                     case None:

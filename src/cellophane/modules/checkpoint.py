@@ -13,7 +13,6 @@ from dill import dumps
 from xxhash import xxh3_64
 
 from cellophane.data import Output, OutputGlob
-from cellophane.util import Timestamp
 
 if TYPE_CHECKING:
     from typing import Any, Iterator, Sequence
@@ -38,8 +37,6 @@ class Checkpoint:
     """
 
     label: str
-    workdir: Path
-    config: Config
     _samples: Samples
     prefix: str
     base_path: Path
@@ -65,19 +62,6 @@ class Checkpoint:
         for output in self._outputs:
             if isinstance(output, Output):
                 output_paths = {output.src}
-            elif isinstance(output, OutputGlob):
-                outputs = output.resolve(
-                    samples=self.samples,
-                    config=self.config,
-                    workdir=self.workdir,
-                    # Only src is considered, so using the current time works
-                    # since timestamps are never included in src paths
-                    # FIXME: Use a sentinel value for no timestamp instead
-                    timestamp=Timestamp(),
-                    _warnings=False,
-                )
-                output_paths = {o.src for o in outputs}
-
             paths |= output_paths
 
         for path in paths.copy():
@@ -230,7 +214,6 @@ class Checkpoints:
     Args:
     ----
         samples (Samples): The samples to get checkpoints for.
-        workdir (Path): The working directory for the checkpoint store.
         config (Config): The configuration object.
 
     """
@@ -238,7 +221,6 @@ class Checkpoints:
     samples: Samples
     config: Config
     prefix: str
-    workdir: Path
     base_path: Path = field(init=False)
     _checkpoints: dict[str, Checkpoint] = field(factory=dict)
 
@@ -253,8 +235,6 @@ class Checkpoints:
                 label=key,
                 base_path=self.base_path,
                 prefix=self.prefix,
-                workdir=self.workdir,
-                config=self.config,
                 samples=self.samples, # ty: ignore[unknown-argument]
             )
 

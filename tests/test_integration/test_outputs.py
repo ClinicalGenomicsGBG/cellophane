@@ -1,95 +1,97 @@
 from time import gmtime
 
+from pytest import mark
+
 from cellophane.testing import BaseTest, Invocation, literal, regex
 
 
 class Test_outputs(BaseTest):
-    args = [
-        "--samples_file samples.yaml",
-        "--workdir out",
-        "--tag DUMMY",
-    ]
-    structure = {
-        "modules/a.py": """
-            from cellophane import runner, post_hook, output, data
-            from shutil import copyfile, copytree
-
-            @post_hook()
-            def o(samples, logger, config, **_):
-                logger.info(f"Copying {len(samples.output)} outputs")
-                for o in samples.output:
-                    if not o.dst.is_relative_to(config.resultdir):
-                        logger.error(f"{o.dst} is not relative to {config.resultdir}")
-                    elif not o.src.exists():
-                        logger.error(f"{o.src} does not exist")
-                    elif o.dst.exists():
-                        logger.error(f"{o.dst} already exists")
-                    elif o.src.is_file():
-                        logger.info(f"Copying {o.src} to {o.dst}")
-                        o.dst.parent.mkdir(parents=True, exist_ok=True)
-                        copyfile(o.src, o.dst)
-                    elif o.src.is_dir():
-                        logger.info(f"Copying directory {o.src} to {o.dst}")
-                        o.dst.parent.mkdir(parents=True, exist_ok=True)
-                        copytree(o.src, o.dst)
-                    else:
-                        logger.error(f"Unknown output type {o}")
-
-
-            @runner()
-            @output("single.txt")
-            @output("sample_{sample.id}.txt")
-            @output("missing.txt")
-            @output("glob/*.txt", dst_name="invalid_rename.txt")
-            @output("single.txt", dst_name="rename.txt")
-            @output("glob/*.txt", dst_dir="timestamp_fmt_dir_{timestamp[%H%M%S]}")
-            @output("single.txt", dst_name="timestamp_fmt_name_{timestamp[%H%M%S]}.txt")
-            @output("glob/*.txt", dst_dir="timestamp_dir_{timestamp}")
-            @output("single.txt", dst_name="timestamp_name_{timestamp}.txt")
-            @output("overwrite_a.txt", dst_name="overwrite.txt")
-            @output("overwrite_b.txt", dst_name="overwrite.txt")
-            @output("nested/**/*.txt")
-            @output("nested", dst_dir="directory")
-            def runner_a(samples, workdir, config, **_):
-                for sample in samples:
-                    (workdir / f"sample_{sample.id}.txt").touch()
-                (workdir / "glob").mkdir()
-                (workdir / "glob" / "a.txt").write_text("GLOB_A")
-                (workdir / "glob" / "b.txt").write_text("GLOB_B")
-                (workdir / "nested" / "a").mkdir(parents=True)
-                (workdir / "nested" / "a" / "x.txt").touch()
-                (workdir / "nested" / "a" / "y.txt").touch()
-                (workdir / "nested" / "b").mkdir(parents=True)
-                (workdir / "nested" / "b" / "z.txt").touch()
-                (workdir / "single.txt").write_text("SINGLE")
-                (workdir / "absolute.txt").write_text("ABSOLUTE")
-                (workdir / "relative.txt").write_text("RELATIVE")
-                (workdir / "overwrite_a.txt").write_text("OVERWRITE")
-                (workdir / "overwrite_b.txt").write_text("OVERWRITE")
-
-                samples.output |= {
-                    data.Output(src="I_DO_NOT_EXIST", dst="I_AM_NOT_RELATIVE"),
-                    data.Output(src="I_DO_NOT_EXIST", dst=config.resultdir / "somepath"),
-                    data.OutputGlob(src=(workdir / "absolute.txt").absolute()),
-                    data.OutputGlob(src=(workdir / "relative.txt")),
-                    data.OutputGlob(src=(workdir / "single.txt"), dst_dir=config.resultdir.absolute()),
-                }
-
-                return samples
-        """,
-        "samples.yaml": """
-            - id: a
-              files:
-              - input/a.txt
-            - id: b
-              files:
-              - input/b.txt
-        """,
-        "input/a.txt": "INPUT_A",
-        "input/b.txt": "INPUT_B",
-    }
+    args = ["--workdir out", "--tag DUMMY"]
     mocks = {"cellophane.util.timestamp.localtime": {"new": lambda *_: gmtime(1092587022.0)}}
 
+    @mark.override(
+        args=[*args, "--samples_file samples.yaml"],
+        structure={
+
+            "modules/a.py": """
+                from cellophane import runner, post_hook, output, data
+                from shutil import copyfile, copytree
+
+                @post_hook()
+                def o(samples, logger, config, **_):
+                    logger.info(f"Copying {len(samples.output)} outputs")
+                    for o in samples.output:
+                        if not o.dst.is_relative_to(config.resultdir):
+                            logger.error(f"{o.dst} is not relative to {config.resultdir}")
+                        elif not o.src.exists():
+                            logger.error(f"{o.src} does not exist")
+                        elif o.dst.exists():
+                            logger.error(f"{o.dst} already exists")
+                        elif o.src.is_file():
+                            logger.info(f"Copying {o.src} to {o.dst}")
+                            o.dst.parent.mkdir(parents=True, exist_ok=True)
+                            copyfile(o.src, o.dst)
+                        elif o.src.is_dir():
+                            logger.info(f"Copying directory {o.src} to {o.dst}")
+                            o.dst.parent.mkdir(parents=True, exist_ok=True)
+                            copytree(o.src, o.dst)
+                        else:
+                            logger.error(f"Unknown output type {o}")
+
+
+                @runner()
+                @output("single.txt")
+                @output("sample_{sample.id}.txt")
+                @output("missing.txt")
+                @output("glob/*.txt", dst_name="invalid_rename.txt")
+                @output("single.txt", dst_name="rename.txt")
+                @output("glob/*.txt", dst_dir="timestamp_fmt_dir_{timestamp[%H%M%S]}")
+                @output("single.txt", dst_name="timestamp_fmt_name_{timestamp[%H%M%S]}.txt")
+                @output("glob/*.txt", dst_dir="timestamp_dir_{timestamp}")
+                @output("single.txt", dst_name="timestamp_name_{timestamp}.txt")
+                @output("overwrite_a.txt", dst_name="overwrite.txt")
+                @output("overwrite_b.txt", dst_name="overwrite.txt")
+                @output("nested/**/*.txt")
+                @output("nested", dst_dir="directory")
+                def runner_a(samples, workdir, config, **_):
+                    for sample in samples:
+                        (workdir / f"sample_{sample.id}.txt").touch()
+                    (workdir / "glob").mkdir()
+                    (workdir / "glob" / "a.txt").write_text("GLOB_A")
+                    (workdir / "glob" / "b.txt").write_text("GLOB_B")
+                    (workdir / "nested" / "a").mkdir(parents=True)
+                    (workdir / "nested" / "a" / "x.txt").touch()
+                    (workdir / "nested" / "a" / "y.txt").touch()
+                    (workdir / "nested" / "b").mkdir(parents=True)
+                    (workdir / "nested" / "b" / "z.txt").touch()
+                    (workdir / "single.txt").write_text("SINGLE")
+                    (workdir / "absolute.txt").write_text("ABSOLUTE")
+                    (workdir / "relative.txt").write_text("RELATIVE")
+                    (workdir / "overwrite_a.txt").write_text("OVERWRITE")
+                    (workdir / "overwrite_b.txt").write_text("OVERWRITE")
+
+                    samples.output |= {
+                        data.Output(src="I_DO_NOT_EXIST", dst="I_AM_NOT_RELATIVE"),
+                        data.Output(src="I_DO_NOT_EXIST", dst=config.resultdir / "somepath"),
+                        data.OutputGlob(src=(workdir / "absolute.txt").absolute()),
+                        data.OutputGlob(src=(workdir / "relative.txt")),
+                        data.OutputGlob(src=(workdir / "single.txt"), dst_dir=config.resultdir.absolute()),
+                    }
+
+                    return samples
+            """,
+            "samples.yaml": """
+                - id: a
+                  files:
+                  - input/a.txt
+                - id: b
+                  files:
+                  - input/b.txt
+            """,
+            "input/a.txt": "INPUT_A",
+            "input/b.txt": "INPUT_B",
+        }
+    )
     def test_outputs(self, invocation: Invocation) -> None:
         assert invocation.logs == literal(
             "Copying 23 outputs",
@@ -121,3 +123,49 @@ class Test_outputs(BaseTest):
             r".*/out/results/single\.txt is not relative to out/results",
         )
         assert invocation.exit_code == 0
+
+    @mark.override(
+        args = [*args, "--samples_file", "samples.yaml"],
+        structure= {
+            "modules/a.py": """
+                from cellophane import runner, output, OutputGlob
+
+                @runner()
+                @output("a.txt")
+                @output("b_*.txt")
+                def a(samples, logger, workdir, config, timestamp, **_):
+                    c = OutputGlob("c.txt", workdir=workdir, config=config, timestamp=timestamp)
+                    samples.output.add(c)
+                    logger.info(f"1: Resolved {len(samples.output)} outputs at start")
+                    (workdir / "a.txt").touch()
+                    (workdir / "b_1.txt").touch()
+                    (workdir / "b_2.txt").touch()
+                    (workdir / "c.txt").touch()
+                    logger.info(f"2: Resolved {len(samples.output)} outputs after touching files")
+                    c.clear_cache()
+                    logger.info(f"3: Resolved {len(samples.output)} outputs after clearing cache output C")
+                    samples.output.clear_cache()
+                    logger.info(f"4: Resolved {len(samples.output)} outputs after clearing cache for all outputs")
+                    samples.output.remove(c)
+                    logger.info(f"5: Resolved {len(samples.output)} outputs after removing output C")
+            """,
+            "samples.yaml": """
+                - id: a
+                  files:
+                  - input/a.txt
+                - id: b
+                  files:
+                  - input/b.txt
+            """,
+            "input/a.txt": "INPUT_A",
+            "input/b.txt": "INPUT_B",
+        }
+    )
+    def test_output_caching(self, invocation: Invocation) -> None:
+        assert invocation.logs == literal(
+            "1: Resolved 0 outputs at start",
+            "2: Resolved 0 outputs after touching files",
+            "3: Resolved 1 outputs after clearing cache output C",
+            "4: Resolved 4 outputs after clearing cache for all outputs",
+            "5: Resolved 3 outputs after removing output C",
+        )

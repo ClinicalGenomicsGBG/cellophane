@@ -1,20 +1,34 @@
 """Tests for the cellophane.__main__ module."""
 
+from __future__ import annotations
+
 from os import chdir
 from pathlib import Path
-from typing import Any, Iterator
+from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock
+
+from click.testing import CliRunner
+from pytest import fixture, mark, param, raises
+from ruamel.yaml import YAML
 
 from cellophane import dev
 from cellophane.testing import literal
-from click.testing import CliRunner
-from pytest import LogCaptureFixture, TempPathFactory, fixture, mark, param, raises
-from pytest_mock import MockerFixture
-from ruamel.yaml import YAML
+from git import Git
 
-from .fixtures import *  # noqa: F403
+from .fixtures import (  # noqa: F401
+    modules_repo,
+    modules_repo_path,
+    project_repo,
+    project_repo_path,
+)
 
 yaml = YAML()
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from pytest import LogCaptureFixture, TempPathFactory
+    from pytest_mock import MockerFixture
 
 
 class Test_ProjectRepo:
@@ -69,7 +83,7 @@ class Test_ModulesRepo:
         index.commit("Invalid modules.json")
         repo.remote("origin").push("master")
         with raises(dev.InvalidModulesRepoError):
-            repo.modules
+            _ = repo.modules
 
     @staticmethod
     def test_invalid_remote_url() -> None:
@@ -137,7 +151,7 @@ class Test_ask_modules_branch:
         _select_mock = MagicMock(ask=MagicMock(return_value="latest"))
         mocker.patch("cellophane.dev.util.select", return_value=_select_mock)
         assert dev.ask_version(
-            [*modules_repo.modules.keys()][0],
+            next(iter(modules_repo.modules)),
             valid_versions=[("foo/1.33.7", "1.33.7")],
         )
         assert _select_mock.ask.call_count == 1
@@ -403,18 +417,14 @@ class Test_module_cli:
         project_repo: dev.ProjectRepo,
         mocker: MockerFixture,
     ) -> None:
-        class ProjectRepoMock(dev.ProjectRepo):
-            def __init__(self, *args: Any, **kwargs: Any) -> None:
-                super().__init__(*args, **kwargs)
-                self.git_orig = self.git
-                self.git = MagicMock(wraps=self.git_orig)
-                self.git.rebase = self._rebase
-
-            def _rebase(self, *args: Any, **kwargs: Any) -> Any:
+        class GitMock(Git):
+            def rebase(self, *args: Any, **kwargs: Any) -> Any:
                 if "--onto" in args[0]:
-                    raise Exception("DUMMY")
-                else:
-                    return self.git_orig.rebase(*args, **kwargs)
+                    raise Exception("DUMMY")  # noqa: TRY002
+                return self._call_process("rebase", *args, **kwargs)
+
+        class ProjectRepoMock(dev.ProjectRepo):
+            GitCommandWrapperType = GitMock
 
         mocker.patch("cellophane.dev.cli.ProjectRepo", ProjectRepoMock)
 
@@ -531,9 +541,7 @@ class Test_project_cli:
             "\n-r modules/mymodule/requirements.txt\n"
         )
         self.runner.invoke(dev.main, "project update")
-        assert (path / "modules" / "requirements.txt").read_text() == literal(
-            "\n-r mymodule/requirements.txt\n"
-        )
+        assert (path / "modules" / "requirements.txt").read_text() == literal("\n-r mymodule/requirements.txt\n")
 
     def test_project_update_invalid_repo(
         self,

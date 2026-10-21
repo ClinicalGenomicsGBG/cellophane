@@ -13,7 +13,7 @@ wheels = [
 
 [[package]]
 name = "cellophane"
-version = "1.3.0.dev0+40a3d2d"
+version = "1.3.0.dev0+b8d2b94"
 source = { editable = "." }
 dependencies = [
     { name = "attrs" },

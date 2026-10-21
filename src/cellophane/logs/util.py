@@ -40,7 +40,7 @@ def _showwarning(showwarning_orig: Callable) -> Callable:
         *args: Any,
         **kwargs: Any,
     ) -> None:
-        if category is not UserWarning:
+        if category not in (UserWarning, DeprecationWarning):
             showwarning_orig(message, category, *args, **kwargs)
             return
 
@@ -59,7 +59,7 @@ def _showwarning(showwarning_orig: Callable) -> Callable:
             func=stack[2].function,
             args=(),
             exc_info=None,
-            extra={"label": "warnings"},
+            extra={"label": "cellophane"},
         )
         logger.handle(record)
 
@@ -68,6 +68,7 @@ def _showwarning(showwarning_orig: Callable) -> Callable:
 
 def handle_warnings() -> None:
     _warnings_showwarning = warnings.showwarning
+    warnings.filterwarnings("once", category=DeprecationWarning)
     warnings.showwarning = _showwarning(_warnings_showwarning)  # ty: ignore[invalid-assignment]
 
 

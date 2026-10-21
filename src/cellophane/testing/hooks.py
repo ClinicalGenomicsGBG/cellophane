@@ -22,12 +22,22 @@ def housekeeping() -> Iterable[None]:
     sys.path.insert(0, str(Path(__file__).parent / "site"))
     reset_modules = sys.modules.copy()
     log_handlers = logging.root.handlers.copy()
+    from cellophane import Sample, Samples
+    sample_mergers = Sample.merge._impls.copy()
+    samples_mergers = Samples.merge._impls.copy()
 
     yield
 
     # Reset the modules to their original state
     for module in set(sys.modules) - set(reset_modules):
         del sys.modules[module]
+
+    # Reset the Sample and Samples ClassVars
+    Sample.merge._impls = sample_mergers
+    Sample._mixins = ()
+    Samples.merge._impls = samples_mergers
+    Samples._mixins = ()
+    Samples._sample_class = Sample
 
     # Remove the tests/site from the Python path
     sys.path.remove(str(Path(__file__).parent / "site"))
@@ -43,9 +53,7 @@ def pytest_runtest_makereport(item: Item, call: CallInfo) -> Iterable[TestReport
     """Hook to add commandline, logs and output to test reports."""
     del call  # Unused
 
-    # NOTE: This syntax is a bit esoteric, and mypy doesn't like it
-    # but this is paraphrased from the pytest docs
-    report: TestReport = yield  # type: ignore[misc, assignment]
+    report: TestReport = yield
     if invocation_ := item.funcargs.get("invocation"):  # ty: ignore[unresolved-attribute]
         _traceback = "".join(format_exception(invocation_.exception))
         report.sections.append(("Args", " ".join(invocation_.args)))
@@ -56,7 +64,7 @@ def pytest_runtest_makereport(item: Item, call: CallInfo) -> Iterable[TestReport
 
 def _is_regex(obj: Any) -> bool:
     # NOTE: We need to use this convoluted check because the class differs
-    # if it is imporeted using the deprecated location in `cellphane.src`
+    # if it is imported using the deprecated location in `cellphane.src`
     # This behavior should be removed when support for the deprecated
     # location is dropped
     cls = obj if isinstance(obj, type) else obj.__class__
@@ -68,7 +76,7 @@ def _is_regex(obj: Any) -> bool:
 
 def _is_literal(obj: Any) -> bool:
     # NOTE: We need to use this convoluted check because the class differs
-    # if it is imporeted using the deprecated location in `cellphane.src`
+    # if it is imported using the deprecated location in `cellphane.src`
     # This behavior should be removed when support for the deprecated
     # location is dropped
     cls = obj if isinstance(obj, type) else obj.__class__
@@ -80,7 +88,7 @@ def _is_literal(obj: Any) -> bool:
 
 def _is_regex_or_literal(obj: Any) -> bool:
     # NOTE: We need to use this convoluted check because the class differs
-    # if it is imporeted using the deprecated location in `cellphane.src`
+    # if it is imported using the deprecated location in `cellophane.src`
     # This behavior should be removed when support for the deprecated
     # location is dropped
     return _is_regex(obj) or _is_literal(obj)

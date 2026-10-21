@@ -9,7 +9,7 @@ from mpire.exception import InterruptWorker
 from psutil import Process, TimeoutExpired
 
 from cellophane.cleanup import DeferredCleaner
-from cellophane.data import OutputGlob, Samples
+from cellophane.data import Samples
 from cellophane.logs import handle_warnings, redirect_logging_to_queue
 
 from .checkpoint import Checkpoints
@@ -21,37 +21,12 @@ if TYPE_CHECKING:
 
     from cellophane.cfg import Config
     from cellophane.executors import Executor
-    from cellophane.modules import Dispatcher
-    from cellophane.util import Timestamp
-
-def _resolve_outputs(
-    samples: Samples,
-    workdir: Path,
-    config: Config,
-    timestamp: Timestamp,
-    logger: LoggerAdapter,
-) -> None:
-    for output_ in samples.output.copy():
-        if not isinstance(output_, OutputGlob):
-            continue
-        samples.output.remove(output_)
-        if not samples.complete:
-            continue
-        try:
-            samples.output |= output_.resolve(
-                samples=samples.complete,
-                workdir=workdir,
-                config=config,
-                timestamp=timestamp,
-            )
-        except Exception as exc:  # pylint: disable=broad-except
-            logger.warning(f"Failed to resolve output {output_}: {exc!r}")
-            logger.debug(exc, exc_info=True)
-
+    from cellophane.modules import Dispatcher, SAMPLE_PREDICATE, Runner
+    from cellophane.util import Timestamp, NamedCallable
 
 def _cleanup(
     *,
-    runner: "Runner",
+    runner: Runner,
     reason: BaseException,
     logger: LoggerAdapter,
     samples: Samples,
@@ -68,11 +43,11 @@ def _cleanup(
         case _:
             reason_ = f"Unhandled exception in runner '{runner.name}': {reason!r}"
 
-    logger.warning(reason_)
+    logger.warning(reason_, exc_info=reason)
     executor.terminate()
 
     logger.debug("Clearing outputs and failing samples")
-    samples.output = set()
+    samples.output.clear()
     for sample in samples:
         sample.fail(reason_)
     for proc in Process().children(recursive=True):
@@ -98,23 +73,26 @@ class Runner:
     """
 
     label: str
-    split_by: str | None
+    split_by: str | Callable | None
     func: Callable
-    main: Callable[..., Samples | None]
+    main: NamedCallable[..., Samples | None]
+    condition: SAMPLE_PREDICATE | None
 
     def __init__(
         self,
-        func: Callable,
+        func: NamedCallable,
         label: str | None = None,
-        split_by: str | None = None,
+        split_by: str | Callable | None = None,
+        condition: SAMPLE_PREDICATE | None = None,
     ) -> None:
-        self.__name__ = func.__name__  # type: ignore[attr-defined]
-        self.__qualname__ = func.__qualname__  # type: ignore[attr-defined]
-        self.name = func.__name__  # type: ignore[attr-defined]
-        self.label = label or func.__name__  # type: ignore[attr-defined]
+        self.__name__ = func.__name__
+        self.__qualname__ = func.__qualname__
+        self.name = func.__name__
+        self.label = label or func.__name__
         self.main = staticmethod(func)
         self.label = label or self.__name__
         self.split_by = split_by
+        self.condition = condition
         super().__init_subclass__()
 
     def __call__(
@@ -162,9 +140,8 @@ class Runner:
                     cleaner=cleaner,
                     checkpoints=Checkpoints(
                         samples=samples,
-                        prefix=f"runner.{self.name}.{group}" if group is not None else f"runner.{self.name}",
-                        workdir=workdir,
                         config=config,
+                        prefix=f"runner.{self.name}.{group}" if group is not None else f"runner.{self.name}",
                     )
                 ):
                     case None:
@@ -186,7 +163,6 @@ class Runner:
                 dispatcher.run_exception_hooks(exception=exc)
                 _cleanup(runner=self, reason=exc, logger=logger, samples=samples, executor=executor)
 
-        _resolve_outputs(samples, workdir, config, timestamp, logger)
         for sample in samples.complete:
             logger.debug(f"Sample {sample.id} processed successfully")
         for sample in samples.unprocessed:
@@ -196,6 +172,8 @@ class Runner:
             cleaner.unregister(workdir)
         for sample in samples.failed:
             logger.debug(f"Sample {sample.id} failed - {sample.failed}")
+
+        samples.output.fill(workdir=workdir, config=config, timestamp=timestamp)
 
         samples = dispatcher.run_post_hooks(
             per="runner",

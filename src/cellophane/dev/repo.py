@@ -6,7 +6,7 @@ import re
 from functools import cached_property
 from pathlib import Path
 from tempfile import mkdtemp
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from git import GitCommandError, InvalidGitRepositoryError, Repo
 from packaging.version import Version as PyPIVersion
@@ -65,7 +65,7 @@ class ModulesRepo(Repo):
     """
 
     @classmethod
-    def from_url(cls, url: str, branch: str) -> "ModulesRepo":
+    def from_url(cls, url: str, branch: str) -> ModulesRepo:
         """Creates a `ModulesRepo` instance by cloning the repository from the specified
         URL.
 
@@ -92,12 +92,13 @@ class ModulesRepo(Repo):
         """
         _path = mkdtemp(prefix="cellophane_modules_")
         try:
-            return cls.clone_from(
+            repo = cls.clone_from(
                 url=url,
                 branch=branch,
                 to_path=_path,
                 checkout=False,
-            )  # type: ignore[return-value]
+            )
+            return cast(ModulesRepo, repo)
         except Exception as exc:
             raise InvalidModulesRepoError(url) from exc
 

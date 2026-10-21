@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 import shlex
-import subprocess as sp  # nosec
+import subprocess as sp
 from typing import TYPE_CHECKING
 
 import psutil
@@ -40,7 +40,7 @@ class SubprocessExecutor(Executor, name="subprocess"):
     ) -> None:
         """Execute a command."""
         del kwargs  # Unused
-        logdir = self.config.logdir / "subprocess"  # ty: ignore[unsupported-operator]
+        logdir = self.config.logdir / "subprocess"
         logdir.mkdir(parents=True, exist_ok=True)
 
         with (
@@ -50,7 +50,7 @@ class SubprocessExecutor(Executor, name="subprocess"):
             proc = sp.Popen(  # nosec
                 shlex.split(shlex.join(args)),
                 cwd=workdir,
-                env=env | ({**os.environ} if os_env else {}),
+                env=({**os.environ} if os_env else {}) | env,
                 stdout=out,
                 stderr=err,
                 start_new_session=True,
@@ -63,8 +63,10 @@ class SubprocessExecutor(Executor, name="subprocess"):
     def terminate_hook(self, uuid: UUID, logger: LoggerAdapter) -> int | None:
         if uuid not in self.pids:
             return None
-
-        proc = psutil.Process(self.pids[uuid])
+        try:
+            proc = psutil.Process(self.pids[uuid])
+        except psutil.NoSuchProcess:
+            return None
         children = proc.children(recursive=True)
         if proc.is_running():
             logger.warning(f"Terminating process (pid={self.pids[uuid]})")

@@ -5,7 +5,7 @@ from copy import copy
 from functools import cached_property
 from pathlib import Path
 from shutil import rmtree
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, overload
 from warnings import warn
 
 from attrs import define, field
@@ -36,7 +36,7 @@ class DeferredCall:
 @define(frozen=True, on_setattr=None)
 class DeferredCleaner:
     root: Path
-    calls: list[DeferredCall] = field(init=False, factory=list)
+    calls: set[DeferredCall] = field(init=False, factory=set)
 
     def register(self, path: Path, ignore_outside_root: bool = False) -> None:
         self._add_call("register", path, ignore_outside_root)
@@ -56,10 +56,27 @@ class DeferredCleaner:
             )
             return
         rpath = _resolve_path(Path(path), self.root)
-        self.calls.append(DeferredCall(action, rpath, False))
+        self.calls.add(DeferredCall(action, rpath, False))
 
     def clean(self) -> None:
         warn("Deferred cleaner does not support cleaning")
+
+    @overload
+    def __and__(self, other: Cleaner) -> Cleaner:
+        ...
+    @overload
+    def __and__(self, other: DeferredCleaner) -> DeferredCleaner:
+        ...
+    def __and__(self, other: Cleaner | DeferredCleaner) -> Cleaner | DeferredCleaner:
+        if isinstance(other, Cleaner):
+            return other & self
+        elif isinstance(other, DeferredCleaner):
+            cleaner = copy(self)
+            cleaner.calls.update(other.calls)
+            return cleaner
+        else:
+            raise TypeError(f"DeferredCleaner cannot be combined with type '{type(other)}'")
+
 
 
 @define(frozen=True, on_setattr=None)
@@ -137,14 +154,20 @@ class Cleaner:
             except BaseException as exc:
                 warn(f"Failed to remove {path}: {exc!r}")
 
-    def __and__(self, other: "DeferredCleaner") -> "Cleaner":
+    def __and__(self, other: Cleaner | DeferredCleaner) -> Cleaner:
         cleaner = copy(self)
-        for call in other.calls:
-            match call:
-                case DeferredCall("register", path, ignore_outside_root):
-                    cleaner.register(path, ignore_outside_root)
-                case DeferredCall("unregister", path, ignore_outside_root):
-                    cleaner.unregister(path, ignore_outside_root)
-                case _:
-                    raise ValueError(f"Invalid deferred action: {call.action}")
+        if isinstance(other, Cleaner):
+            cleaner.trash.update(other.trash)
+        elif isinstance(other, DeferredCleaner):
+            for call in other.calls:
+                match call:
+                    case DeferredCall("register", path, ignore_outside_root):
+                        cleaner.register(path, ignore_outside_root)
+                    case DeferredCall("unregister", path, ignore_outside_root):
+                        cleaner.unregister(path, ignore_outside_root)
+                    case _:
+                        raise ValueError(f"Invalid deferred action: {call.action}")
+        else:
+            raise TypeError(f"Cleaner cannot be combined with type '{type(other)}'")
+
         return cleaner

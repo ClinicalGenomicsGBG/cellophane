@@ -9,6 +9,7 @@ import rich_click as click
 from attrs import define, field, setters
 
 from .click_ import FORMATS, SCHEMA_TYPES, InvertibleParamType, click_type
+from click.parser import UNSET
 
 if TYPE_CHECKING:
     from typing import Any, Callable, Iterable, SupportsFloat, Type
@@ -54,12 +55,12 @@ class Flag:
     key: tuple[str, ...] = field(converter=_convert_tuple, on_setattr=setters.convert)
     type: SCHEMA_TYPES | None = field(default=None)
     items: dict | None = field(default=None)
-    min: int | None = field(
+    min: float | None = field(
         default=None,
         converter=_convert_float,
         on_setattr=setters.convert,
     )
-    max: int | None = field(
+    max: float | None = field(
         default=None,
         converter=_convert_float,
         on_setattr=setters.convert,
@@ -67,7 +68,7 @@ class Flag:
     format: FORMATS | None = field(default=None)
     pattern: str | None = field(default=None)
     description: str | None = field(default=None)
-    default: Any = field(default=None)
+    default: Any = field(default=UNSET)
     value: Any = field(default=None)
     enum: list | None = field(default=None)
     required: bool = field(default=False)
@@ -184,13 +185,13 @@ class Flag:
             (f"--{self.flag}/--{self.no_flag}" if self.type == "boolean" else f"--{self.flag}"),
             self.flag,
             type=type_,
-            default=True if self.type == "boolean" and default is None else default,
+            default=True if self.type == "boolean" and default is UNSET else default,
             required=self.required,
             help=self.description,
             show_default=(
-                (self.secret or default is None)
+                (self.secret or default is UNSET)
                 or (
-                    type_.invert(default)  # type: ignore[arg-type]
+                    type_.invert(default)  # nofmt
                     if default and isinstance(type_, InvertibleParamType)
                     else str(default)
                 )

@@ -1,17 +1,17 @@
 [project]
 name = "cellophane"
-version = "1.2.0"
+version = "1.3.0-dev+b8d2b94"
 description = "Library for feature-rich wrapper development"
 authors = [{name = "Erik Demitz-Helin",email = "erik.demitz-helin@gu.se"}]
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "click>=8.2.0,<9.0.0",
+    "click>=8.3.0,<9.0.0",
     "psutil>=5.9.4,<6.0.0",
     "rich-click>=1.8.9,<2.0.0",
     "humanfriendly>=10.0,<11.0",
     "jsonschema>=4.17.3,<5.0.0",
-    "attrs>=23.1.0,<24.0.0",
+    "attrs>=26.1.0,<27.0.0",
     "ruamel-yaml>=0.17.32,<0.18.0",
     "mpire[dill]>=2.10.2",
     "gitpython>=3.1.31,<4.0.0",
@@ -21,6 +21,7 @@ dependencies = [
     "packaging>=24.0,<25.0",
     "xxhash>=3.4.1,<4.0.0",
     "pytest-profiling>=1.7.0,<2.0.0",
+    "py-rattler>=0.22.0",
 ]
 
 [dependency-groups]
@@ -59,6 +60,11 @@ branch = false
 
 [tool.coverage.report]
 omit = ["**/pytest-*/*"]
+
+
+[tool.ruff.per-file-ignores]
+"tests/*.py" = ["RUF012"]
+
 
 [build-system]
 requires = ["uv_build>=0.11.15,<0.12"]

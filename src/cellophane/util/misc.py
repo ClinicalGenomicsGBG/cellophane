@@ -76,4 +76,4 @@ R = TypeVar("R", covariant=True)
 class NamedCallable(Protocol[P, R]):
     __name__: str
     __qualname__: str
-    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R: ...  # type: ignore[misc]
+    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R: ...

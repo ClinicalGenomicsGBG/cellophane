@@ -123,7 +123,7 @@ def module(
         )
     except (InvalidProjectRepoError, InvalidModulesRepoError) as exception:
         _logger.critical(exception, exc_info=True)
-        raise SystemExit(1) from exception  # pylint: disable=bad-exception-cause
+        raise SystemExit(1) from exception
 
     if _repo.is_dirty():
         _logger.critical("Repository has uncommited changes")

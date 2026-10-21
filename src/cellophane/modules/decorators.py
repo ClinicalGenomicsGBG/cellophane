@@ -26,6 +26,7 @@ def output(
     dst_name: str | None = None,
     checkpoint: str = "main",
     optional: bool = False,
+    metadata: dict[str, Any] | None = None,
 ) -> Callable:
     """Decorator to mark output files of a runner.
 
@@ -33,6 +34,9 @@ def output(
 
     Celophane does not handle the copying of the files. Instead, it is expected
     that a post-hook will be used to copy the files to the output directory.
+
+    Metadata can be attached to the output using the `metadata` argument. This
+    can be used to store additional information about the output.
 
     Args:
     ----
@@ -46,9 +50,11 @@ def output(
                 with tag and the value of the split_by attribute (if any) appended.
         dst_dir: The directory to copy the files to. If not specified, the
             directory of the matched file will be used. If the matched file is
+            an OutputGlob, the directory will be relative to the working directory.
         dst_name: The name to copy the files to. If not specified, the name
             of the matched file will be used.
         checkpoint: The checkpoint to use for the output. Defaults to "main".
+        metadata: A dictionary of metadata to attach to the output. Defaults to None.
 
     """
 
@@ -80,6 +86,7 @@ def output(
                 config=config,
                 timestamp=timestamp,
                 workdir=workdir,
+                metadata=metadata,
             )
             samples.output.add(glob_)
             return func(

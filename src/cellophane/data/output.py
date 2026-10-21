@@ -50,7 +50,7 @@ class Output:
     metadata: Container = field(
         kw_only=True,
         factory=Container,
-        converter=Container,
+        converter=lambda v: Container() if v is None else Container(v),
         on_setattr=convert,
     )
 
@@ -109,7 +109,7 @@ class OutputGlob:
     metadata: dict = field(
         kw_only=True,
         factory=dict,
-        converter=dict,
+        converter=lambda v: {} if v is None else dict(v),
         on_setattr=convert,
     )
     _resolved: set[Output] | None = field(

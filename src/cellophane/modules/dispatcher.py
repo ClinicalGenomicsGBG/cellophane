@@ -215,13 +215,12 @@ def _run_pre_post_hooks(
 
             checkpoints = Checkpoints(
                 samples=hook_samples,
+                config=config,
                 prefix=(
                     f"{hook.when}-hook.{hook.name}"
                     if checkpoint_suffix is None
                     else f"{hook.when}-hook.{hook.name}.{checkpoint_suffix}"
                 ),
-                workdir=config.workdir / config.tag,
-                config=config,
             )
 
             samples |= hook(

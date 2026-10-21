@@ -178,6 +178,8 @@ class _PrePostHook(_BaseHook):
             case returned:
                 logger.warning(f"Unexpected return type {type(returned)}")
                 _ret = samples
+
+        _ret.output.fill(workdir=root, config=config, timestamp=timestamp)
         return _ret
 
 
